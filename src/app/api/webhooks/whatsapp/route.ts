@@ -116,8 +116,29 @@ export async function POST(req: Request) {
     .single()
 
   if (!user) {
-    if (text.toUpperCase().startsWith('START ')) {
+    const upperText = text.trim().toUpperCase()
+    if (upperText.startsWith('START ')) {
       handleOptIn(from, text.replace(/^START\s+/i, '').trim()).catch(() => {})
+    } else if (upperText === 'YES' || upperText === 'Y') {
+      // Phone verification flow: user entered their number in Settings,
+      // Nivi sent them a message, they replied YES
+      const { data: pendingUser } = await supabase
+        .from('users')
+        .select('id, name')
+        .eq('pending_whatsapp', from)
+        .single()
+
+      if (pendingUser) {
+        await supabase
+          .from('users')
+          .update({ whatsapp_number: from, pending_whatsapp: null })
+          .eq('id', pendingUser.id)
+
+        sendWhatsApp(
+          from,
+          `Connected! 🎉\n\nHey ${pendingUser.name}, your WhatsApp is linked. I'm Nivi — your AI brand strategist.\n\nI'll send you your morning brief, engagement opportunities, and help you write posts right here.\n\nJust text me anytime.`
+        ).catch(() => {})
+      }
     }
     return Response.json({ ok: true })
   }

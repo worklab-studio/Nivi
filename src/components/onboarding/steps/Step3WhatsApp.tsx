@@ -8,20 +8,14 @@ interface Step3Props {
 }
 
 export function Step3WhatsApp({ onNext, onBack }: Step3Props) {
-  const [optInCode, setOptInCode] = useState('')
+  const [phone, setPhone] = useState('')
+  const [sending, setSending] = useState(false)
+  const [sent, setSent] = useState(false)
   const [connected, setConnected] = useState(false)
-  const [copied, setCopied] = useState(false)
 
+  // Poll for WhatsApp connection after message is sent
   useEffect(() => {
-    fetch('/api/onboarding/get-opt-in-code')
-      .then((r) => r.json())
-      .then((d) => setOptInCode(d.code))
-      .catch(() => {})
-  }, [])
-
-  // Poll for WhatsApp connection
-  useEffect(() => {
-    if (connected) return
+    if (!sent || connected) return
     const interval = setInterval(async () => {
       try {
         const r = await fetch('/api/onboarding/check-whatsapp')
@@ -36,12 +30,21 @@ export function Step3WhatsApp({ onNext, onBack }: Step3Props) {
       }
     }, 3000)
     return () => clearInterval(interval)
-  }, [connected, onNext])
+  }, [sent, connected, onNext])
 
-  const copyMessage = () => {
-    navigator.clipboard.writeText(`START ${optInCode}`)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+  async function handleSend() {
+    if (!phone.trim() || sending) return
+    setSending(true)
+    try {
+      const res = await fetch('/api/onboarding/send-whatsapp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phoneNumber: phone }),
+      })
+      const data = await res.json()
+      if (data.ok) setSent(true)
+    } catch { /* ignore */ }
+    setSending(false)
   }
 
   return (
@@ -50,60 +53,63 @@ export function Step3WhatsApp({ onNext, onBack }: Step3Props) {
         Connect your WhatsApp
       </h2>
       <p className="text-muted-foreground text-[15px] mb-10">
-        Nivi lives in your WhatsApp. Do these two steps:
+        Nivi lives in your WhatsApp — morning briefs, engagement alerts, and post writing all happen right there.
       </p>
 
-      <div className="space-y-6">
-        <div className="border border-border rounded-lg p-5">
-          <p className="font-sans text-[11px] text-muted-foreground uppercase tracking-widest mb-2">
-            Step 1
-          </p>
-          <p className="text-foreground text-[15px] mb-1">
-            Save this number in your contacts
-          </p>
-          <p className="font-sans text-[20px] text-white tracking-wider">
-            +91 93061 25452
-          </p>
-          <p className="font-sans text-[11px] text-muted-foreground mt-1">
-            Save as &ldquo;Nivi — My Brand Strategist&rdquo;
-          </p>
-        </div>
-
-        <div className="border border-border rounded-lg p-5">
-          <p className="font-sans text-[11px] text-muted-foreground uppercase tracking-widest mb-2">
-            Step 2
-          </p>
-          <p className="text-foreground text-[15px] mb-3">
-            Send this message to Nivi on WhatsApp
-          </p>
-          <div className="flex items-center gap-3">
-            <code className="font-sans text-[16px] text-white bg-accent px-4 py-2 rounded">
-              START {optInCode || '--------'}
-            </code>
-            <button
-              onClick={copyMessage}
-              className="font-sans text-[11px] text-muted-foreground border border-border px-3 py-2 rounded hover:border-border transition-colors"
-            >
-              {copied ? 'Copied ✓' : 'Copy'}
-            </button>
+      {connected ? (
+        <div className="flex items-center gap-3 text-emerald-600 animate-fade-in">
+          <div className="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center">
+            <span className="text-black text-[11px] font-bold">✓</span>
           </div>
+          <span className="font-sans text-[13px]">
+            WhatsApp connected! Taking you to the next step...
+          </span>
         </div>
-
-        {connected ? (
-          <div className="flex items-center gap-3 text-emerald-600 animate-fade-in">
-            <div className="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center">
-              <span className="text-black text-[11px] font-bold">✓</span>
+      ) : !sent ? (
+        <div className="space-y-4">
+          <div className="border border-border rounded-lg p-5">
+            <p className="text-foreground text-[15px] mb-3">
+              Enter your WhatsApp number
+            </p>
+            <div className="flex items-center gap-3">
+              <input
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="+91 93061 25452"
+                className="flex-1 bg-secondary border border-border rounded-md px-4 py-3 text-[16px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
+              />
+              <button
+                onClick={handleSend}
+                disabled={!phone.trim() || sending}
+                className="px-5 py-3 bg-primary text-primary-foreground rounded-md text-[14px] font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
+              >
+                {sending ? 'Sending…' : 'Send'}
+              </button>
             </div>
-            <span className="font-sans text-[13px]">
-              WhatsApp connected! Taking you to the next step...
-            </span>
+            <p className="text-[11px] text-muted-foreground mt-2">
+              Include country code (e.g. +91 for India, +1 for US)
+            </p>
           </div>
-        ) : (
-          <p className="font-sans text-[11px] text-muted-foreground animate-pulse">
-            Waiting for your WhatsApp message...
+          <p className="text-[12px] text-muted-foreground">
+            Nivi will send you a WhatsApp message. Just reply <span className="font-semibold text-foreground">YES</span> to connect.
           </p>
-        )}
-      </div>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <div className="border border-emerald-500/30 bg-emerald-500/5 rounded-lg p-5">
+            <p className="text-[15px] text-emerald-600 font-medium mb-1">
+              Message sent to {phone}
+            </p>
+            <p className="text-[13px] text-muted-foreground">
+              Open WhatsApp and reply <span className="font-semibold text-foreground">YES</span> to Nivi&apos;s message.
+            </p>
+          </div>
+          <p className="font-sans text-[11px] text-muted-foreground animate-pulse">
+            Waiting for your reply...
+          </p>
+        </div>
+      )}
 
       <div className="mt-auto flex justify-between pt-6">
         <button
@@ -112,12 +118,14 @@ export function Step3WhatsApp({ onNext, onBack }: Step3Props) {
         >
           ← Back
         </button>
-        <button
-          onClick={onNext}
-          className="text-muted-foreground text-[13px] font-sans hover:text-foreground transition-colors"
-        >
-          Skip for now →
-        </button>
+        {(connected || sent) && (
+          <button
+            onClick={onNext}
+            className="text-muted-foreground text-[13px] font-sans hover:text-foreground transition-colors"
+          >
+            {connected ? 'Next →' : 'Skip for now →'}
+          </button>
+        )}
       </div>
     </div>
   )

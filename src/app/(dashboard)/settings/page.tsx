@@ -37,8 +37,9 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false)
   const [linkedInConnecting, setLinkedInConnecting] = useState(false)
   const [showWhatsAppConnect, setShowWhatsAppConnect] = useState(false)
-  const [optInCode, setOptInCode] = useState('')
-  const [waCopied, setWaCopied] = useState(false)
+  const [waPhone, setWaPhone] = useState('')
+  const [waSending, setWaSending] = useState(false)
+  const [waSent, setWaSent] = useState(false)
 
   useEffect(() => {
     fetch('/api/dashboard/settings')
@@ -85,13 +86,25 @@ export default function SettingsPage() {
     }
   }
 
-  async function handleWhatsAppConnect() {
+  function handleWhatsAppConnect() {
     setShowWhatsAppConnect(true)
-    if (!optInCode) {
-      const res = await fetch('/api/onboarding/get-opt-in-code')
+  }
+
+  async function handleSendWhatsApp() {
+    if (!waPhone.trim() || waSending) return
+    setWaSending(true)
+    try {
+      const res = await fetch('/api/onboarding/send-whatsapp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phoneNumber: waPhone }),
+      })
       const data = await res.json()
-      setOptInCode(data.code ?? '')
-    }
+      if (data.ok) {
+        setWaSent(true)
+      }
+    } catch { /* ignore */ }
+    setWaSending(false)
   }
 
   const handleUpgrade = async () => {
@@ -179,37 +192,47 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            {/* WhatsApp connect instructions */}
+            {/* WhatsApp connect — phone input flow */}
             {showWhatsAppConnect && !settings?.whatsapp_number && (
-              <div className="mt-3 p-4 bg-secondary/50 border border-border rounded-lg space-y-3">
-                <div>
-                  <p className="text-[11px] text-muted-foreground uppercase tracking-wider font-medium mb-1">Step 1</p>
-                  <p className="text-[12px] text-foreground">Save this number in your contacts:</p>
-                  <p className="text-[15px] font-semibold text-foreground mt-1">+91 93061 25452</p>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">Save as &ldquo;Nivi&rdquo;</p>
-                </div>
-                <div>
-                  <p className="text-[11px] text-muted-foreground uppercase tracking-wider font-medium mb-1">Step 2</p>
-                  <p className="text-[12px] text-foreground mb-2">Send this message to Nivi on WhatsApp:</p>
-                  <div className="flex items-center gap-2">
-                    <code className="text-[13px] text-foreground bg-accent px-3 py-1.5 rounded font-mono">
-                      START {optInCode || '…'}
-                    </code>
-                    <button
-                      onClick={() => {
-                        navigator.clipboard.writeText(`START ${optInCode}`)
-                        setWaCopied(true)
-                        setTimeout(() => setWaCopied(false), 2000)
-                      }}
-                      className="text-[10px] text-muted-foreground border border-border px-2 py-1 rounded hover:text-foreground transition-colors"
-                    >
-                      {waCopied ? 'Copied!' : 'Copy'}
-                    </button>
+              <div className="mt-3 p-4 bg-secondary/50 border border-border rounded-lg">
+                {!waSent ? (
+                  <div className="space-y-3">
+                    <p className="text-[12px] text-foreground">
+                      Enter your WhatsApp number — Nivi will send you a message.
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="tel"
+                        value={waPhone}
+                        onChange={(e) => setWaPhone(e.target.value)}
+                        placeholder="+91 93061 25452"
+                        className="flex-1 bg-card border border-border rounded-md px-3 py-2 text-[13px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
+                      />
+                      <button
+                        onClick={handleSendWhatsApp}
+                        disabled={!waPhone.trim() || waSending}
+                        className="text-[11px] px-4 py-2 bg-primary text-primary-foreground rounded-md hover:opacity-90 transition-opacity disabled:opacity-50"
+                      >
+                        {waSending ? 'Sending…' : 'Send'}
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground">
+                      Include country code (e.g. +91 for India, +1 for US)
+                    </p>
                   </div>
-                </div>
-                <p className="text-[10px] text-muted-foreground">
-                  After sending, refresh this page to see the connection status.
-                </p>
+                ) : (
+                  <div className="space-y-2">
+                    <p className="text-[12px] text-emerald-600 font-medium">
+                      Message sent to {waPhone}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">
+                      Open WhatsApp and reply <span className="font-semibold text-foreground">YES</span> to Nivi&apos;s message to connect.
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">
+                      Refresh this page after replying to see the connection status.
+                    </p>
+                  </div>
+                )}
               </div>
             )}
           </div>
