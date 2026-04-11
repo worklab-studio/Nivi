@@ -1,6 +1,7 @@
 import { auth } from '@clerk/nextjs/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import { FeaturesGrid } from '@/components/landing/FeaturesGrid'
 
 export default async function LandingPage() {
   const { userId } = await auth()
@@ -130,61 +131,7 @@ export default async function LandingPage() {
           <h2 className="text-[32px] sm:text-[40px] font-bold text-center mb-4">Everything you need to grow on LinkedIn</h2>
           <p className="text-[#777] text-center text-[15px] mb-16 max-w-xl mx-auto">From writing to publishing to engaging — Nivi handles the entire LinkedIn workflow so you can focus on your business.</p>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {[
-              {
-                icon: '✍️',
-                title: 'AI Post Composer',
-                desc: 'Interactive editor with inline AI edits. Select text, rewrite, expand, or punch it up. LinkedIn-accurate preview with formatting toolbar.',
-              },
-              {
-                icon: '🧠',
-                title: 'Voice DNA',
-                desc: 'Nivi studies your writing samples, interview answers, and creator templates. Every post sounds like you — not AI.',
-              },
-              {
-                icon: '📱',
-                title: 'WhatsApp-First',
-                desc: 'Morning briefs, post approvals, engagement alerts — all in WhatsApp. Publish with one word. No dashboard required.',
-              },
-              {
-                icon: '💬',
-                title: 'Strategic Engagement',
-                desc: 'Auto-scrapes target accounts for new posts. Draft voice-matched comments on demand. Build relationships at scale.',
-              },
-              {
-                icon: '📅',
-                title: 'Content Calendar',
-                desc: 'Drag-and-drop scheduling with 15-minute snap zones. Move posts between days, or back to drafts. Real-time red line.',
-              },
-              {
-                icon: '💡',
-                title: 'Inspiration Library',
-                desc: '100+ top LinkedIn creators scraped weekly. Trending posts, creator archetypes, hook analysis. Remix any post in your voice.',
-              },
-              {
-                icon: '🎯',
-                title: 'Brand Identity',
-                desc: 'Import from LinkedIn, define your story, offers, and target audiences. Nivi uses this context for every piece of content.',
-              },
-              {
-                icon: '📊',
-                title: 'Performance Analytics',
-                desc: 'Track impressions, engagement rates, content pillar performance, and hook types. Data-driven content strategy.',
-              },
-              {
-                icon: '🔄',
-                title: 'Memory & Learning',
-                desc: 'Same brain on WhatsApp and dashboard. Nivi remembers preferences, learns from edits, and gets smarter over time.',
-              },
-            ].map((f) => (
-              <div key={f.title} className="bg-[#111] border border-[#222] rounded-xl p-6 hover:border-[#333] transition-colors group">
-                <span className="text-2xl mb-3 block">{f.icon}</span>
-                <h3 className="text-[15px] font-semibold text-white mb-2 group-hover:text-white/90">{f.title}</h3>
-                <p className="text-[13px] text-[#888] leading-relaxed">{f.desc}</p>
-              </div>
-            ))}
-          </div>
+          <FeaturesGrid />
         </div>
       </section>
 
