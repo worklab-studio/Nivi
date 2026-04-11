@@ -3,48 +3,45 @@
 import Link from 'next/link'
 import { useUser } from '@clerk/nextjs'
 import { useState } from 'react'
+import { Check } from 'lucide-react'
 
 const PLANS = [
   {
-    id: 'starter',
-    name: 'Starter',
-    price: 19,
+    id: 'dashboard',
+    name: 'Dashboard',
+    price: 29,
+    description: 'All dashboard features for LinkedIn growth',
     features: [
-      '1 LinkedIn account',
-      '30 AI posts per month',
-      'WhatsApp daily delivery',
-      'Basic analytics',
-      '30-day memory',
+      'AI Post Composer with inline editing',
+      'Content Calendar with drag-and-drop',
+      'Inspiration Library (100+ creators)',
+      'Brand Identity & Voice DNA',
+      'Writing Style Templates',
+      'Knowledge Base',
+      'Strategic Engagement tools',
+      'Performance Analytics',
+      'Unlimited drafts & scheduling',
     ],
     highlight: false,
   },
   {
-    id: 'pro',
-    name: 'Pro',
-    price: 29,
+    id: 'complete',
+    name: 'Complete',
+    price: 35,
     badge: 'Most popular',
+    description: 'Dashboard + Nivi on WhatsApp',
     features: [
-      'Everything in Starter',
-      '2 LinkedIn + 1 X account',
-      '90 AI posts per month',
-      'Image generation',
-      'Full memory + knowledge base',
-      'Engagement engine (5 daily comments)',
-      'Strategy advice',
-    ],
-    highlight: true,
-  },
-  {
-    id: 'agency',
-    name: 'Agency',
-    price: 79,
-    features: [
-      'Everything in Pro',
-      'Up to 10 accounts',
-      'Unlimited posts',
+      'Everything in Dashboard',
+      'Nivi on WhatsApp — your AI strategist',
+      'Daily morning post briefs',
+      'One-word publishing (reply "POST")',
+      'Conversational post editing',
+      'Engagement opportunity alerts',
+      'Voice note → post conversion',
+      'Long-term memory & learning',
       'Priority support',
     ],
-    highlight: false,
+    highlight: true,
   },
 ]
 
@@ -58,10 +55,10 @@ export default function PricingPage() {
       return
     }
     setLoading(planId)
-    const res = await fetch('/api/stripe/checkout', {
+    const res = await fetch('/api/lemonsqueezy/checkout', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ planId }),
+      body: JSON.stringify({ plan: planId }),
     })
     const data = await res.json()
     if (data.url) window.location.href = data.url
@@ -69,32 +66,17 @@ export default function PricingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="min-h-screen bg-[#0a0a0a] text-white">
       {/* Nav */}
-      <nav className="flex items-center justify-between px-8 py-5 border-b border-border">
-        <Link href="/" className="font-sans text-2xl font-bold">
-          Nivi
-        </Link>
+      <nav className="flex items-center justify-between px-8 py-5 max-w-6xl mx-auto">
+        <Link href="/" className="font-sans text-2xl font-bold">Nivi</Link>
         <div className="flex items-center gap-6">
           {isSignedIn ? (
-            <Link
-              href="/"
-              className="font-sans text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Dashboard
-            </Link>
+            <Link href="/overview" className="text-sm text-[#888] hover:text-white transition-colors">Dashboard</Link>
           ) : (
             <>
-              <Link
-                href="/sign-in"
-                className="font-sans text-sm text-muted-foreground hover:text-foreground transition-colors"
-              >
-                Sign in
-              </Link>
-              <Link
-                href="/sign-up"
-                className="bg-white text-black font-sans text-sm px-4 py-2 rounded-md hover:bg-white/90 transition-colors"
-              >
+              <Link href="/sign-in" className="text-sm text-[#888] hover:text-white transition-colors">Sign in</Link>
+              <Link href="/sign-up" className="bg-white text-black text-sm px-5 py-2 rounded-lg font-medium hover:bg-white/90 transition-colors">
                 Get started
               </Link>
             </>
@@ -103,66 +85,68 @@ export default function PricingPage() {
       </nav>
 
       {/* Header */}
-      <div className="max-w-4xl mx-auto px-8 pt-16 pb-12 text-center">
-        <h1 className="font-sans text-4xl font-bold mb-4">
+      <div className="text-center pt-16 pb-12 px-8">
+        <h1 className="font-sans text-[44px] font-bold tracking-tight mb-4">
           Simple pricing
         </h1>
-        <p className="text-muted-foreground text-lg font-sans">
-          Start free. Upgrade when you need more.
+        <p className="text-[#888] text-lg max-w-lg mx-auto">
+          Start with a 7-day free trial. No credit card required.
         </p>
       </div>
 
-      {/* Plans grid */}
-      <div className="max-w-5xl mx-auto px-8 pb-20 grid grid-cols-1 md:grid-cols-3 gap-6">
-        {PLANS.map((plan) => (
-          <div
-            key={plan.id}
-            className={`rounded-lg p-6 flex flex-col ${
-              plan.highlight
-                ? 'border-2 border-white bg-card'
-                : 'border border-border bg-card'
-            }`}
-          >
-            {plan.badge && (
-              <span className="self-start font-sans text-[10px] px-2 py-0.5 bg-white text-black rounded-full mb-4">
-                {plan.badge}
-              </span>
-            )}
-            <h2 className="font-sans text-[13px] text-muted-foreground uppercase tracking-widest mb-2">
-              {plan.name}
-            </h2>
-            <div className="flex items-baseline gap-1 mb-6">
-              <span className="font-sans text-[36px] font-medium text-white">
-                ${plan.price}
-              </span>
-              <span className="font-sans text-[13px] text-muted-foreground">
-                /mo
-              </span>
-            </div>
-            <ul className="space-y-3 mb-8 flex-1">
-              {plan.features.map((feature) => (
-                <li
-                  key={feature}
-                  className="flex items-start gap-2 text-[13px] text-muted-foreground"
-                >
-                  <span className="text-emerald-600 mt-0.5">&#10003;</span>
-                  {feature}
-                </li>
-              ))}
-            </ul>
-            <button
-              onClick={() => handleSelect(plan.id)}
-              disabled={loading === plan.id}
-              className={`w-full font-sans text-[13px] px-4 py-2.5 rounded-md transition-colors disabled:opacity-50 ${
+      {/* Cards */}
+      <div className="max-w-4xl mx-auto px-8 pb-24">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {PLANS.map((plan) => (
+            <div
+              key={plan.id}
+              className={`relative rounded-2xl p-8 ${
                 plan.highlight
-                  ? 'bg-white text-black hover:bg-white/90'
-                  : 'border border-border text-muted-foreground hover:text-white hover:border-white'
+                  ? 'bg-[#111] border-2 border-white/20'
+                  : 'bg-[#111] border border-[#222]'
               }`}
             >
-              {loading === plan.id ? 'Loading...' : 'Get Started'}
-            </button>
-          </div>
-        ))}
+              {plan.badge && (
+                <span className="absolute -top-3 left-6 bg-white text-black text-[11px] font-semibold px-3 py-1 rounded-full">
+                  {plan.badge}
+                </span>
+              )}
+
+              <h3 className="text-[20px] font-semibold mb-1">{plan.name}</h3>
+              <p className="text-[13px] text-[#888] mb-5">{plan.description}</p>
+
+              <div className="flex items-baseline gap-1 mb-6">
+                <span className="text-[48px] font-bold">${plan.price}</span>
+                <span className="text-[#888] text-[15px]">/month</span>
+              </div>
+
+              <button
+                onClick={() => handleSelect(plan.id)}
+                disabled={loading !== null}
+                className={`w-full py-3.5 rounded-lg text-[14px] font-medium transition-all mb-8 ${
+                  plan.highlight
+                    ? 'bg-white text-black hover:bg-white/90 hover:shadow-[0_0_24px_rgba(255,255,255,0.1)]'
+                    : 'bg-[#222] text-white hover:bg-[#333]'
+                } disabled:opacity-50`}
+              >
+                {loading === plan.id ? 'Loading…' : 'Start 7-day free trial'}
+              </button>
+
+              <ul className="space-y-3">
+                {plan.features.map((f) => (
+                  <li key={f} className="flex items-start gap-2.5 text-[13px] text-[#aaa]">
+                    <Check size={14} className="text-[#22c55e] mt-0.5 shrink-0" />
+                    {f}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+
+        <p className="text-center text-[12px] text-[#555] mt-8">
+          Cancel anytime. No long-term contracts. Prices in USD.
+        </p>
       </div>
     </div>
   )

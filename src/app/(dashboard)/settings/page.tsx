@@ -13,6 +13,7 @@ interface UserSettings {
   whatsapp_number: string | null
   unipile_account_id: string | null
   brand_kit: Record<string, unknown>
+  ls_subscription_id: string | null
 }
 
 const TIMEZONES = [
@@ -234,6 +235,45 @@ export default function SettingsPage() {
                   </div>
                 )}
               </div>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* Plan */}
+      <section className="bg-card border border-border rounded-lg p-5">
+        <h2 className="font-sans text-[11px] text-muted-foreground uppercase tracking-widest mb-4">
+          Plan
+        </h2>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-[13px] text-foreground font-medium capitalize">
+              {settings?.plan === 'complete' ? 'Complete ($35/mo)' : settings?.plan === 'dashboard' ? 'Dashboard ($29/mo)' : 'Free trial'}
+            </p>
+            <p className="text-[10px] text-muted-foreground mt-0.5">
+              {settings?.plan === 'free' ? 'Upgrade to unlock all features' : 'All features active'}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            {settings?.plan === 'free' && (
+              <button
+                onClick={() => { window.location.href = '/pricing' }}
+                className="font-sans text-[11px] px-3 py-1.5 bg-primary text-primary-foreground rounded-md hover:opacity-90 transition-opacity"
+              >
+                Upgrade
+              </button>
+            )}
+            {(settings?.plan === 'dashboard' || settings?.plan === 'complete') && (
+              <button
+                onClick={async () => {
+                  const res = await fetch('/api/lemonsqueezy/portal', { method: 'POST' })
+                  const data = await res.json()
+                  if (data.url) window.location.href = data.url
+                }}
+                className="font-sans text-[11px] px-3 py-1.5 border border-border text-muted-foreground rounded-md hover:text-foreground transition-colors"
+              >
+                Manage subscription
+              </button>
             )}
           </div>
         </div>

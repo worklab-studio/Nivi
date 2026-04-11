@@ -143,6 +143,17 @@ export async function POST(req: Request) {
     return Response.json({ ok: true })
   }
 
+  // Gate WhatsApp behind 'complete' plan (with 7-day trial grace)
+  const { checkPlan } = await import('@/lib/utils/planGating')
+  const { allowed, isTrialing } = await checkPlan(user.id, 'complete')
+  if (!allowed) {
+    sendWhatsApp(
+      from,
+      `Hey ${user.name}! To keep chatting with me on WhatsApp, upgrade to the Complete plan ($35/mo).\n\nVisit: ${process.env.NEXT_PUBLIC_APP_URL}/pricing`
+    ).catch(() => {})
+    return Response.json({ ok: true })
+  }
+
   // Process async — return 200 immediately to Unipile
   processMessage(user, chatId, text, isForwarded, messageType, attachments, messageId).catch((err) => {
     console.error('[WA error]', err?.message ?? err)
