@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "nivi-dev",
+      "runtimeExecutable": "/Users/worklab/Nivi/.claude/run-dev.sh",
+      "runtimeArgs": [],
+      "port": 3000,
+      "autoPort": false
+    }
+  ]
+}
