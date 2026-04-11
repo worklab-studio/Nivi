@@ -366,12 +366,10 @@ export default function OverviewPage() {
         )
       })()}
 
-      {/* ──── INSIGHTS GRID ──── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* LEFT — 2/3 */}
-        <div className="lg:col-span-2 space-y-4">
-          {/* Impressions chart */}
-          <SectionCard title="Impressions" description="Last 30 days">
+      {/* ──── INSIGHTS ──── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Impressions chart */}
+        <SectionCard title="Impressions" description="Last 30 days">
             {hasAnyData ? (
               <div className="h-[200px] -mx-2">
                 <ResponsiveContainer width="100%" height="100%">
@@ -429,69 +427,8 @@ export default function OverviewPage() {
             )}
           </SectionCard>
 
-          {/* Top posts */}
-          <SectionCard
-            title="Top performing posts"
-            actions={
-              hasAnyData ? (
-                <Link
-                  href="/posts"
-                  className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
-                >
-                  View all <ArrowRight size={10} />
-                </Link>
-              ) : undefined
-            }
-          >
-            {(data?.topPosts ?? []).length > 0 ? (
-              <div className="divide-y divide-border">
-                {data!.topPosts.map((post, i) => (
-                  <Link
-                    key={post.id}
-                    href={`/compose?draft=${post.id}`}
-                    className="flex items-center gap-3 py-3 hover:bg-secondary/30 rounded-lg px-2 -mx-2 transition-colors"
-                  >
-                    <span
-                      className={`text-[13px] font-semibold w-5 tabular-nums text-center ${
-                        i === 0 ? 'text-primary' : 'text-muted-foreground'
-                      }`}
-                    >
-                      {i + 1}
-                    </span>
-                    <p className="text-[12px] text-foreground flex-1 truncate leading-snug">
-                      {post.preview}
-                    </p>
-                    <div className="flex items-center gap-3 shrink-0">
-                      <span className="text-[10px] text-muted-foreground tabular-nums flex items-center gap-1">
-                        <Eye size={10} /> {fmtNum(post.impressions)}
-                      </span>
-                      <span className="text-[10px] text-muted-foreground tabular-nums flex items-center gap-1">
-                        <Heart size={10} /> {fmtNum(post.likes)}
-                      </span>
-                      <span className="text-[10px] text-muted-foreground tabular-nums flex items-center gap-1">
-                        <MessageCircle size={10} /> {post.comments}
-                      </span>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            ) : (
-              <EmptyInsight
-                icon={FileText}
-                message="Your top posts will appear here after publishing"
-                actionLabel="Write your first post"
-                actionHref="/compose"
-              />
-            )}
-          </SectionCard>
-
-          {/* Streak removed — yearly heatmap is above */}
-        </div>
-
-        {/* RIGHT — 1/3 */}
-        <div className="space-y-4">
-          {/* Content pillars */}
-          <SectionCard title="Content pillars">
+        {/* Content pillars */}
+        <SectionCard title="Content pillars">
             {(data?.pillarPerformance ?? []).some((p) => p.count > 0) ? (
               <div className="h-[160px]">
                 <ResponsiveContainer width="100%" height="100%">
@@ -635,7 +572,63 @@ export default function OverviewPage() {
               />
             )}
           </SectionCard>
-        </div>
+
+        {/* Top performing posts — full width row */}
+        <SectionCard
+          title="Top performing posts"
+          className="lg:col-span-2"
+          actions={
+            hasAnyData ? (
+              <Link
+                href="/posts"
+                className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
+              >
+                View all <ArrowRight size={10} />
+              </Link>
+            ) : undefined
+          }
+        >
+          {(data?.topPosts ?? []).length > 0 ? (
+            <div className="divide-y divide-border">
+              {data!.topPosts.map((post, i) => (
+                <Link
+                  key={post.id}
+                  href={`/compose?draft=${post.id}`}
+                  className="flex items-center gap-3 py-3 hover:bg-secondary/30 rounded-lg px-2 -mx-2 transition-colors"
+                >
+                  <span
+                    className={`text-[13px] font-semibold w-5 tabular-nums text-center ${
+                      i === 0 ? 'text-primary' : 'text-muted-foreground'
+                    }`}
+                  >
+                    {i + 1}
+                  </span>
+                  <p className="text-[12px] text-foreground flex-1 truncate leading-snug">
+                    {post.preview}
+                  </p>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <span className="text-[10px] text-muted-foreground tabular-nums flex items-center gap-1">
+                      <Eye size={10} /> {fmtNum(post.impressions)}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground tabular-nums flex items-center gap-1">
+                      <Heart size={10} /> {fmtNum(post.likes)}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground tabular-nums flex items-center gap-1">
+                      <MessageCircle size={10} /> {post.comments}
+                    </span>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <EmptyInsight
+              icon={FileText}
+              message="Your top posts will appear here after publishing"
+              actionLabel="Write your first post"
+              actionHref="/compose"
+            />
+          )}
+        </SectionCard>
       </div>
     </div>
   )
