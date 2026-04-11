@@ -92,7 +92,7 @@ export function Step3WhatsApp({ onNext, onBack }: Step3Props) {
             </p>
           </div>
           <p className="text-[12px] text-muted-foreground">
-            Nivi will send you a WhatsApp message. Just reply <span className="font-semibold text-foreground">YES</span> to connect.
+            Nivi will send you a WhatsApp message. Just reply <span className="font-semibold text-foreground">ok</span> to connect.
           </p>
         </div>
       ) : (
@@ -102,7 +102,7 @@ export function Step3WhatsApp({ onNext, onBack }: Step3Props) {
               Message sent to {phone}
             </p>
             <p className="text-[13px] text-muted-foreground">
-              Open WhatsApp and reply <span className="font-semibold text-foreground">YES</span> to Nivi&apos;s message.
+              Open WhatsApp and reply <span className="font-semibold text-foreground">ok</span> to Nivi&apos;s message.
             </p>
           </div>
           <p className="font-sans text-[11px] text-muted-foreground animate-pulse">

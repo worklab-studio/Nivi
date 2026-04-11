@@ -34,7 +34,7 @@ export async function POST(req: Request) {
   try {
     await sendWhatsApp(
       normalized,
-      `Hey! 👋 I'm Nivi — your AI brand strategist.\n\nReply *YES* to connect your WhatsApp and start working together.`
+      `Hey there, Nivi this side.\nYour LinkedIn brand strategist.\n\nWe're together for the next 7 days, till you hire me fulltime.\n\nText "ok" to connect.`
     )
     return Response.json({ ok: true })
   } catch (err) {

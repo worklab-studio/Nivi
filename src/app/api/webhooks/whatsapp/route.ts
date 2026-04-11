@@ -119,7 +119,7 @@ export async function POST(req: Request) {
     const upperText = text.trim().toUpperCase()
     if (upperText.startsWith('START ')) {
       handleOptIn(from, text.replace(/^START\s+/i, '').trim()).catch(() => {})
-    } else if (upperText === 'YES' || upperText === 'Y') {
+    } else if (['YES', 'Y', 'OK', 'OKAY', 'YEP', 'SURE', 'HI', 'HELLO', 'HEY'].includes(upperText)) {
       // Phone verification flow: user entered their number in Settings,
       // Nivi sent them a message, they replied YES
       const { data: pendingUser } = await supabase

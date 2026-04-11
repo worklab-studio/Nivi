@@ -226,7 +226,7 @@ export default function SettingsPage() {
                       Message sent to {waPhone}
                     </p>
                     <p className="text-[11px] text-muted-foreground">
-                      Open WhatsApp and reply <span className="font-semibold text-foreground">YES</span> to Nivi&apos;s message to connect.
+                      Open WhatsApp and reply <span className="font-semibold text-foreground">ok</span> to Nivi&apos;s message to connect.
                     </p>
                     <p className="text-[10px] text-muted-foreground">
                       Refresh this page after replying to see the connection status.
