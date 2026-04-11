@@ -35,6 +35,10 @@ export default function SettingsPage() {
   const [settings, setSettings] = useState<UserSettings | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState('')
   const [saving, setSaving] = useState(false)
+  const [linkedInConnecting, setLinkedInConnecting] = useState(false)
+  const [showWhatsAppConnect, setShowWhatsAppConnect] = useState(false)
+  const [optInCode, setOptInCode] = useState('')
+  const [waCopied, setWaCopied] = useState(false)
 
   useEffect(() => {
     fetch('/api/dashboard/settings')
@@ -56,6 +60,39 @@ export default function SettingsPage() {
     },
     []
   )
+
+  async function handleLinkedInConnect() {
+    setLinkedInConnecting(true)
+    try {
+      const res = await fetch('/api/onboarding/linkedin-auth', { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) { setLinkedInConnecting(false); return }
+
+      const popup = window.open(data.url, 'linkedin-auth', 'width=600,height=700,scrollbars=yes')
+      const check = setInterval(async () => {
+        if (popup?.closed) {
+          clearInterval(check)
+          const r = await fetch('/api/onboarding/check-linkedin')
+          const d = await r.json()
+          if (d.connected) {
+            setSettings((prev) => prev ? { ...prev, unipile_account_id: d.accountId ?? 'connected' } : prev)
+          }
+          setLinkedInConnecting(false)
+        }
+      }, 500)
+    } catch {
+      setLinkedInConnecting(false)
+    }
+  }
+
+  async function handleWhatsAppConnect() {
+    setShowWhatsAppConnect(true)
+    if (!optInCode) {
+      const res = await fetch('/api/onboarding/get-opt-in-code')
+      const data = await res.json()
+      setOptInCode(data.code ?? '')
+    }
+  }
 
   const handleUpgrade = async () => {
     const res = await fetch('/api/stripe/portal', { method: 'POST' })
@@ -97,33 +134,83 @@ export default function SettingsPage() {
                 </p>
               </div>
             </div>
-            <button className="font-sans text-[11px] px-3 py-1.5 border border-border text-muted-foreground rounded-md hover:text-foreground transition-colors">
-              {settings?.unipile_account_id ? 'Reconnect' : 'Connect'}
+            <button
+              onClick={handleLinkedInConnect}
+              disabled={linkedInConnecting}
+              className="font-sans text-[11px] px-3 py-1.5 border border-border text-muted-foreground rounded-md hover:text-foreground transition-colors disabled:opacity-50"
+            >
+              {linkedInConnecting ? 'Connecting…' : settings?.unipile_account_id ? 'Reconnect' : 'Connect'}
             </button>
           </div>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div
-                className={`w-2 h-2 rounded-full ${
-                  settings?.whatsapp_number ? 'bg-emerald-500' : 'bg-destructive'
-                }`}
-              />
-              <div>
-                <p className="text-[13px] text-foreground">WhatsApp</p>
-                <p className="font-sans text-[10px] text-muted-foreground">
-                  {settings?.whatsapp_number
-                    ? `+${settings.whatsapp_number.slice(0, 4)}XXX XXXXX`
-                    : 'Not connected'}
-                </p>
+          <div>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div
+                  className={`w-2 h-2 rounded-full ${
+                    settings?.whatsapp_number ? 'bg-emerald-500' : 'bg-destructive'
+                  }`}
+                />
+                <div>
+                  <p className="text-[13px] text-foreground">WhatsApp</p>
+                  <p className="font-sans text-[10px] text-muted-foreground">
+                    {settings?.whatsapp_number
+                      ? `+${settings.whatsapp_number.slice(0, 4)}XXX XXXXX`
+                      : 'Not connected'}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {!settings?.whatsapp_number && (
+                  <button
+                    onClick={handleWhatsAppConnect}
+                    className="font-sans text-[11px] px-3 py-1.5 border border-border text-muted-foreground rounded-md hover:text-foreground transition-colors"
+                  >
+                    Connect
+                  </button>
+                )}
+                {settings?.whatsapp_number && (
+                  <button
+                    onClick={() => saveField('whatsapp_number', '')}
+                    className="font-sans text-[11px] px-3 py-1.5 border border-border text-muted-foreground rounded-md hover:text-foreground transition-colors"
+                  >
+                    Disconnect
+                  </button>
+                )}
               </div>
             </div>
-            {settings?.whatsapp_number && (
-              <button
-                onClick={() => saveField('whatsapp_number', '')}
-                className="font-sans text-[11px] px-3 py-1.5 border border-border text-muted-foreground rounded-md hover:text-foreground transition-colors"
-              >
-                Disconnect
-              </button>
+
+            {/* WhatsApp connect instructions */}
+            {showWhatsAppConnect && !settings?.whatsapp_number && (
+              <div className="mt-3 p-4 bg-secondary/50 border border-border rounded-lg space-y-3">
+                <div>
+                  <p className="text-[11px] text-muted-foreground uppercase tracking-wider font-medium mb-1">Step 1</p>
+                  <p className="text-[12px] text-foreground">Save this number in your contacts:</p>
+                  <p className="text-[15px] font-semibold text-foreground mt-1">+91 93061 25452</p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">Save as &ldquo;Nivi&rdquo;</p>
+                </div>
+                <div>
+                  <p className="text-[11px] text-muted-foreground uppercase tracking-wider font-medium mb-1">Step 2</p>
+                  <p className="text-[12px] text-foreground mb-2">Send this message to Nivi on WhatsApp:</p>
+                  <div className="flex items-center gap-2">
+                    <code className="text-[13px] text-foreground bg-accent px-3 py-1.5 rounded font-mono">
+                      START {optInCode || '…'}
+                    </code>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(`START ${optInCode}`)
+                        setWaCopied(true)
+                        setTimeout(() => setWaCopied(false), 2000)
+                      }}
+                      className="text-[10px] text-muted-foreground border border-border px-2 py-1 rounded hover:text-foreground transition-colors"
+                    >
+                      {waCopied ? 'Copied!' : 'Copy'}
+                    </button>
+                  </div>
+                </div>
+                <p className="text-[10px] text-muted-foreground">
+                  After sending, refresh this page to see the connection status.
+                </p>
+              </div>
             )}
           </div>
         </div>

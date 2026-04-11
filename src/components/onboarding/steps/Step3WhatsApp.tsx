@@ -62,7 +62,7 @@ export function Step3WhatsApp({ onNext, onBack }: Step3Props) {
             Save this number in your contacts
           </p>
           <p className="font-sans text-[20px] text-white tracking-wider">
-            +91 00000 00000
+            +91 93061 25452
           </p>
           <p className="font-sans text-[11px] text-muted-foreground mt-1">
             Save as &ldquo;Nivi — My Brand Strategist&rdquo;
