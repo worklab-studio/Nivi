@@ -33,6 +33,12 @@ export async function GET() {
   ])
 
   const allPosts = posts ?? []
+
+  // Helper to safely access post_analytics (Supabase returns object, not array, due to unique constraint)
+  type Analytics = { impressions?: number; likes?: number; comments?: number; shares?: number; engagement_rate?: number }
+  const getAnalytics = (p: (typeof allPosts)[0]): Analytics =>
+    (p.post_analytics as unknown as Analytics) ?? {}
+
   const published = allPosts.filter((p) => p.status === 'published')
   const thisWeekStart = startOfWeek(new Date(), { weekStartsOn: 1 })
   const lastWeekStart = subWeeks(thisWeekStart, 1)
@@ -46,8 +52,8 @@ export async function GET() {
       new Date(p.published_at!) < thisWeekStart
   )
 
-  const sum = (arr: typeof allPosts, key: string) =>
-    arr.reduce((s, p) => s + (p.post_analytics?.[0]?.[key] ?? 0), 0)
+  const sum = (arr: typeof allPosts, key: keyof Analytics) =>
+    arr.reduce((s, p) => s + (Number(getAnalytics(p)[key]) || 0), 0)
   const delta = (curr: number, prev: number) =>
     prev === 0 ? 0 : Math.round(((curr - prev) / prev) * 100)
 
@@ -60,7 +66,7 @@ export async function GET() {
     published.length > 0
       ? Math.round(
           (published.reduce(
-            (s, p) => s + (p.post_analytics?.[0]?.engagement_rate ?? 0),
+            (s, p) => s + (getAnalytics(p).engagement_rate ?? 0),
             0
           ) /
             published.length) *
@@ -190,7 +196,7 @@ export async function GET() {
     return {
       date,
       impressions: dayPosts.reduce(
-        (s, p) => s + (p.post_analytics?.[0]?.impressions ?? 0),
+        (s, p) => s + (getAnalytics(p).impressions ?? 0),
         0
       ),
     }
@@ -203,7 +209,7 @@ export async function GET() {
       pp.length > 0
         ? Math.round(
             (pp.reduce(
-              (s, p) => s + (p.post_analytics?.[0]?.engagement_rate ?? 0),
+              (s, p) => s + (getAnalytics(p).engagement_rate ?? 0),
               0
             ) /
               pp.length) *
@@ -228,7 +234,7 @@ export async function GET() {
         hp.length > 0
           ? Math.round(
               hp.reduce(
-                (s, p) => s + (p.post_analytics?.[0]?.comments ?? 0),
+                (s, p) => s + (getAnalytics(p).comments ?? 0),
                 0
               ) / hp.length
             )
@@ -248,9 +254,9 @@ export async function GET() {
     .map((p) => ({
       id: p.id,
       preview: p.content?.slice(0, 100) ?? '',
-      impressions: p.post_analytics?.[0]?.impressions ?? 0,
-      likes: p.post_analytics?.[0]?.likes ?? 0,
-      comments: p.post_analytics?.[0]?.comments ?? 0,
+      impressions: getAnalytics(p).impressions ?? 0,
+      likes: getAnalytics(p).likes ?? 0,
+      comments: getAnalytics(p).comments ?? 0,
     }))
 
   // Enrich profile with identity + Clerk fallback
