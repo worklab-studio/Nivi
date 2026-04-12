@@ -16,7 +16,7 @@ export async function publishToLinkedIn(
 
   if (!user?.unipile_account_id) {
     if (user?.whatsapp_number) {
-      await sendWhatsApp(user.whatsapp_number, 'LinkedIn not connected. reconnect at nivi.app/settings')
+      await sendWhatsApp(user.whatsapp_number, 'LinkedIn not connected. reconnect at hellonivi.com/settings')
     }
     return
   }

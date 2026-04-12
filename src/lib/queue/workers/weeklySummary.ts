@@ -96,6 +96,6 @@ Output ONLY the summary text.`,
 
   await sendWhatsApp(
     user.whatsapp_number,
-    `\ud83d\udcca Week in review\n\n${summary}\n\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nPosts: ${weekPosts.length}\nImpressions: ${totalImpressions.toLocaleString()}\nLikes: ${totalLikes.toLocaleString()}\nComments: ${totalComments.toLocaleString()}\nStreak: ${user.streak_count} days\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n\nFull analytics: nivi.app/analytics`
+    `\ud83d\udcca Week in review\n\n${summary}\n\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nPosts: ${weekPosts.length}\nImpressions: ${totalImpressions.toLocaleString()}\nLikes: ${totalLikes.toLocaleString()}\nComments: ${totalComments.toLocaleString()}\nStreak: ${user.streak_count} days\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n\nFull analytics: hellonivi.com/analytics`
   )
 }

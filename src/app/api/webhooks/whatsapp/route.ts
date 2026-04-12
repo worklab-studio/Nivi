@@ -280,7 +280,7 @@ async function processMessage(
   if (cmd === 'STOP') {
     const supabase = getSupabaseAdmin()
     await supabase.from('users').update({ whatsapp_number: null }).eq('id', userId)
-    await sendWhatsApp(user.whatsapp_number, "unsubscribed. reconnect anytime at nivi.app", chatId)
+    await sendWhatsApp(user.whatsapp_number, "unsubscribed. reconnect anytime at hellonivi.com", chatId)
     return
   }
 

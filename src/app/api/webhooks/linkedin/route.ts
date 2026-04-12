@@ -61,7 +61,7 @@ export async function POST(req: Request) {
               if (impressions >= milestone && previousImpressions < milestone) {
                 await sendWhatsApp(
                   user.whatsapp_number,
-                  `\ud83d\ude80 Your post just hit ${milestone.toLocaleString()} impressions.\n"${post.content?.slice(0, 60)}..."\n\nSee full analytics: nivi.app/analytics`
+                  `\ud83d\ude80 Your post just hit ${milestone.toLocaleString()} impressions.\n"${post.content?.slice(0, 60)}..."\n\nSee full analytics: hellonivi.com/analytics`
                 )
                 break
               }

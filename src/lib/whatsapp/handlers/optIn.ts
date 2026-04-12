@@ -16,7 +16,7 @@ export async function handleOptIn(
   if (!user) {
     await sendWhatsApp(
       from,
-      "That code doesn't match any account. Please check your code at nivi.app/onboarding"
+      "That code doesn't match any account. Please check your code at hellonivi.com/onboarding"
     )
     return
   }
@@ -39,7 +39,7 @@ export async function handleOptIn(
   } else {
     await sendWhatsApp(
       from,
-      `Welcome to Nivi, ${user.name}!\n\nYour WhatsApp is now connected.\nHead back to nivi.app to finish setting up your AI profile.`
+      `Welcome to Nivi, ${user.name}!\n\nYour WhatsApp is now connected.\nHead back to hellonivi.com to finish setting up your AI profile.`
     )
   }
 }
