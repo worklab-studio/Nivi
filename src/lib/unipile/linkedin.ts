@@ -181,6 +181,7 @@ export async function getMyRecentPosts(
         id: string
         text: string
         date: string
+        parsed_datetime?: string
         impressions_counter: number
         reaction_counter: number
         comment_counter: number
@@ -190,7 +191,7 @@ export async function getMyRecentPosts(
       }) => ({
         id: p.id,
         text: p.text ?? '',
-        date: p.date,
+        date: p.parsed_datetime ?? p.date,
         impressions: p.impressions_counter ?? 0,
         likes: p.reaction_counter ?? 0,
         comments: p.comment_counter ?? 0,
