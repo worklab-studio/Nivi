@@ -8,7 +8,7 @@ import { Check } from 'lucide-react'
 const PLANS = [
   {
     id: 'dashboard',
-    name: 'Dashboard',
+    name: 'Nivi Starter',
     price: 29,
     description: 'All dashboard features for LinkedIn growth',
     features: [
@@ -26,12 +26,12 @@ const PLANS = [
   },
   {
     id: 'complete',
-    name: 'Complete',
+    name: 'Nivi Pro',
     price: 35,
     badge: 'Most popular',
     description: 'Dashboard + Nivi on WhatsApp',
     features: [
-      'Everything in Dashboard',
+      'Everything in Nivi Starter',
       'Nivi on WhatsApp — your AI strategist',
       'Daily morning post briefs',
       'One-word publishing (reply "POST")',

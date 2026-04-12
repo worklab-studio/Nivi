@@ -248,7 +248,7 @@ export default function SettingsPage() {
         <div className="flex items-center justify-between">
           <div>
             <p className="text-[13px] text-foreground font-medium capitalize">
-              {settings?.plan === 'complete' ? 'Complete ($35/mo)' : settings?.plan === 'dashboard' ? 'Dashboard ($29/mo)' : 'Free trial'}
+              {settings?.plan === 'complete' ? 'Nivi Pro ($35/mo)' : settings?.plan === 'dashboard' ? 'Nivi Starter ($29/mo)' : 'Free trial'}
             </p>
             <p className="text-[10px] text-muted-foreground mt-0.5">
               {settings?.plan === 'free' ? 'Upgrade to unlock all features' : 'All features active'}
