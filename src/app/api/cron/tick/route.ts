@@ -89,21 +89,26 @@ export async function GET(req: Request) {
     }
   } catch { /* skip */ }
 
-  // === 3. LINKEDIN ANALYTICS SYNC ===
+  // === 3. LINKEDIN ANALYTICS SYNC (once daily, only active paid users) ===
   try {
     const { data: users } = await supabase
       .from('users')
       .select('id, unipile_account_id')
       .not('unipile_account_id', 'is', null)
+      .in('plan', ['dashboard', 'complete'])
       .limit(50)
 
-    for (const u of users ?? []) {
-      try {
-        const { syncLinkedInAnalytics } = await import('@/lib/unipile/syncAnalytics')
-        const result = await syncLinkedInAnalytics(u.id)
-        results.push(`analytics synced for ${u.id}: ${result.synced} posts`)
-      } catch {
-        // skip failed syncs
+    // Only run between 3-4 AM UTC to avoid duplicate runs
+    const hour = now.getUTCHours()
+    if (hour === 3) {
+      for (const u of users ?? []) {
+        try {
+          const { syncLinkedInAnalytics } = await import('@/lib/unipile/syncAnalytics')
+          const result = await syncLinkedInAnalytics(u.id)
+          results.push(`analytics synced for ${u.id}: ${result.synced} posts`)
+        } catch {
+          // skip failed syncs
+        }
       }
     }
   } catch { /* skip */ }
