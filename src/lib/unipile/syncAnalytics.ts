@@ -72,6 +72,8 @@ export async function syncLinkedInAnalytics(
 
   for (const liPost of liPosts) {
     if (!liPost.text || liPost.text.length < 20) continue
+    // Skip reposts/shares (Unipile returns them with 0 impressions or very short text)
+    if (liPost.impressions === 0 && liPost.likes === 0 && liPost.comments === 0) continue
 
     const contentKey = liPost.text.slice(0, 100).toLowerCase().trim()
 
