@@ -80,6 +80,12 @@ export async function syncLinkedInAnalytics(
 
     if (!postId) {
       // Create a new post entry for this LinkedIn-only post
+      let pubDate = new Date().toISOString()
+      try {
+        const d = new Date(liPost.date)
+        if (!isNaN(d.getTime())) pubDate = d.toISOString()
+      } catch { /* use current date */ }
+
       const { data: inserted } = await supabase
         .from('posts')
         .insert({
@@ -87,7 +93,7 @@ export async function syncLinkedInAnalytics(
           content: liPost.text,
           linkedin_post_id: liPost.id,
           status: 'published',
-          published_at: liPost.date ? new Date(liPost.date).toISOString() : new Date().toISOString(),
+          published_at: pubDate,
         })
         .select('id')
         .single()
