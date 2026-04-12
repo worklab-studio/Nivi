@@ -89,5 +89,24 @@ export async function GET(req: Request) {
     }
   } catch { /* skip */ }
 
+  // === 3. LINKEDIN ANALYTICS SYNC ===
+  try {
+    const { data: users } = await supabase
+      .from('users')
+      .select('id, unipile_account_id')
+      .not('unipile_account_id', 'is', null)
+      .limit(50)
+
+    for (const u of users ?? []) {
+      try {
+        const { syncLinkedInAnalytics } = await import('@/lib/unipile/syncAnalytics')
+        const result = await syncLinkedInAnalytics(u.id)
+        results.push(`analytics synced for ${u.id}: ${result.synced} posts`)
+      } catch {
+        // skip failed syncs
+      }
+    }
+  } catch { /* skip */ }
+
   return Response.json({ ok: true, results, time: now.toISOString() })
 }

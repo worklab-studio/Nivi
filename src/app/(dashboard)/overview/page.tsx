@@ -27,6 +27,7 @@ import {
   Calendar,
   Users,
   Sparkles,
+  RefreshCw,
 } from 'lucide-react'
 import { StreakRow } from '@/components/dashboard/StreakRow'
 import { SectionCard } from '@/components/dashboard/SectionCard'
@@ -251,12 +252,28 @@ export default function OverviewPage() {
                   </div>
                 )}
               </div>
-              <Link href={heroAction.href}>
-                <Button size="sm" className="gap-1.5 shrink-0">
-                  <PenSquare size={14} />
-                  {heroAction.label}
-                </Button>
-              </Link>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const res = await fetch('/api/dashboard/sync-analytics', { method: 'POST' })
+                    const d = await res.json()
+                    if (d.ok) {
+                      window.location.reload()
+                    }
+                  }}
+                  className="text-[11px] text-muted-foreground hover:text-foreground border border-border px-2.5 py-1.5 rounded-md transition-colors"
+                  title="Sync LinkedIn analytics"
+                >
+                  <RefreshCw size={12} />
+                </button>
+                <Link href={heroAction.href}>
+                  <Button size="sm" className="gap-1.5">
+                    <PenSquare size={14} />
+                    {heroAction.label}
+                  </Button>
+                </Link>
+              </div>
             </div>
 
             {/* Week strip + badges */}
