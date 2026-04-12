@@ -11,7 +11,7 @@ export async function GET() {
   const supabase = getSupabaseAdmin()
 
   const [{ data: user }, { data: posts }, { data: engagement }, { data: identity }, linkedInProfile] = await Promise.all([
-    supabase.from('users').select('name, streak_count, unipile_account_id').eq('id', userId).single(),
+    supabase.from('users').select('name, streak_count, unipile_account_id, whatsapp_number').eq('id', userId).single(),
     supabase
       .from('posts')
       .select('*, post_analytics(*)')
@@ -308,6 +308,10 @@ export async function GET() {
     pillarCount: pillars.length,
     followers,
     connections,
+    connectionStatus: {
+      linkedin: !!user?.unipile_account_id,
+      whatsapp: !!user?.whatsapp_number,
+    },
     draftsCount,
     scheduledCount,
     streakCount: user?.streak_count ?? 0,

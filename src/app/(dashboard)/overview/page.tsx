@@ -28,9 +28,11 @@ import {
   Users,
   Sparkles,
   RefreshCw,
+  X,
 } from 'lucide-react'
 import { StreakRow } from '@/components/dashboard/StreakRow'
 import { SectionCard } from '@/components/dashboard/SectionCard'
+import { ConnectionModal } from '@/components/dashboard/ConnectionModal'
 import { Button } from '@/components/ui/button'
 import { format, subDays } from 'date-fns'
 
@@ -40,6 +42,7 @@ interface OverviewData {
   aboutYou: string
   followers: number
   connections: number
+  connectionStatus: { linkedin: boolean; whatsapp: boolean }
   audienceCount: number
   pillarCount: number
   draftsCount: number
@@ -145,11 +148,23 @@ function MetricCard({
 export default function OverviewPage() {
   const [data, setData] = useState<OverviewData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [showConnectModal, setShowConnectModal] = useState(false)
+  const [bannerDismissed, setBannerDismissed] = useState(false)
 
   useEffect(() => {
     fetch('/api/dashboard/overview')
       .then((r) => r.json())
-      .then((d) => { setData(d); setLoading(false) })
+      .then((d) => {
+        setData(d)
+        setLoading(false)
+        // Auto-show modal if both disconnected and not dismissed recently
+        const dismissed = localStorage.getItem('connection-modal-dismissed')
+        const dismissedAt = dismissed ? parseInt(dismissed) : 0
+        const hoursSinceDismiss = (Date.now() - dismissedAt) / 3600000
+        if (!d.connectionStatus?.linkedin && !d.connectionStatus?.whatsapp && hoursSinceDismiss > 24) {
+          setShowConnectModal(true)
+        }
+      })
       .catch(() => setLoading(false))
   }, [])
 
@@ -353,6 +368,61 @@ export default function OverviewPage() {
           </Link>
         )}
       </div>
+
+      {/* ──── CONNECTION BANNER ──── */}
+      {!loading && !bannerDismissed && (!data?.connectionStatus?.linkedin || !data?.connectionStatus?.whatsapp) && (
+        <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl px-5 py-4 mb-6 flex items-start gap-4">
+          <div className="flex-1 space-y-1.5">
+            {!data?.connectionStatus?.linkedin && (
+              <div className="flex items-center gap-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                <p className="text-[12px] text-foreground">
+                  <span className="font-medium">LinkedIn not connected</span>
+                  <span className="text-muted-foreground"> — connect to sync analytics and publish posts</span>
+                </p>
+              </div>
+            )}
+            {!data?.connectionStatus?.whatsapp && (
+              <div className="flex items-center gap-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                <p className="text-[12px] text-foreground">
+                  <span className="font-medium">WhatsApp not connected</span>
+                  <span className="text-muted-foreground"> — connect for morning briefs and post approvals</span>
+                </p>
+              </div>
+            )}
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => setShowConnectModal(true)}
+              className="text-[11px] px-3 py-1.5 bg-primary text-primary-foreground rounded-md font-medium hover:opacity-90 transition-opacity"
+            >
+              Connect now
+            </button>
+            <button
+              onClick={() => {
+                setBannerDismissed(true)
+                localStorage.setItem('connection-modal-dismissed', String(Date.now()))
+              }}
+              className="text-muted-foreground hover:text-foreground transition-colors p-1"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ──── CONNECTION MODAL ──── */}
+      <ConnectionModal
+        open={showConnectModal}
+        onClose={() => {
+          setShowConnectModal(false)
+          localStorage.setItem('connection-modal-dismissed', String(Date.now()))
+        }}
+        linkedinConnected={data?.connectionStatus?.linkedin ?? false}
+        whatsappConnected={data?.connectionStatus?.whatsapp ?? false}
+        onLinkedInConnected={() => window.location.reload()}
+      />
 
       {/* ──── METRICS ──── */}
       {(() => {
