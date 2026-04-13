@@ -3,62 +3,263 @@
 import { useRef, useEffect } from 'react'
 import Link from 'next/link'
 import { motion, useScroll, useTransform } from 'framer-motion'
+import * as THREE from 'three'
 
-/**
- * Hero with the particle-style portrait rendered as an image
- * with CSS-based glow effects and scroll animations.
- * The AI-generated image already has the particle aesthetic.
- */
 export function ParticleHero() {
   const sectionRef = useRef<HTMLElement>(null)
-  const imageRef = useRef<HTMLDivElement>(null)
-  const glowRef = useRef<HTMLDivElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const mouseRef = useRef({ x: 0, y: 0 })
 
   const { scrollYProgress } = useScroll({
     target: sectionRef,
     offset: ['start start', 'end start'],
   })
-
-  const textOpacity = useTransform(scrollYProgress, [0, 0.25], [1, 0])
-  const imageScale = useTransform(scrollYProgress, [0, 0.5, 1], [1, 1.8, 4])
-  const imageOpacity = useTransform(scrollYProgress, [0, 0.5, 0.8, 1], [1, 1, 0.5, 0])
+  const textOpacity = useTransform(scrollYProgress, [0, 0.3], [1, 0])
   const bgColor = useTransform(
     scrollYProgress,
     [0, 0.5, 0.8, 1],
     ['rgba(10,10,10,1)', 'rgba(10,10,10,1)', 'rgba(200,200,220,0.8)', 'rgba(255,255,255,1)']
   )
-  const imageFilter = useTransform(
-    scrollYProgress,
-    [0, 0.4, 0.7],
-    ['brightness(1)', 'brightness(1.3)', 'brightness(2.5)']
-  )
 
-  // Cursor glow effect
   useEffect(() => {
-    const container = imageRef.current
-    const glow = glowRef.current
-    if (!container || !glow) return
+    const container = containerRef.current
+    if (!container) return
 
+    const w = container.clientWidth
+    const h = container.clientHeight
+
+    const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: false })
+    renderer.setSize(w, h)
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+    renderer.setClearColor(0x000000, 0)
+    container.appendChild(renderer.domElement)
+    Object.assign(renderer.domElement.style, { position: 'absolute', inset: '0' })
+
+    const scene = new THREE.Scene()
+    const camera = new THREE.PerspectiveCamera(50, w / h, 0.1, 200)
+    camera.position.z = 4.5
+    const initialCamZ = 4.5
+
+    let points: THREE.Points | null = null
+    let mat: THREE.ShaderMaterial | null = null
+    const startTime = performance.now()
+    let animId = 0
+
+    // Mouse
     const onMouseMove = (e: MouseEvent) => {
       const rect = container.getBoundingClientRect()
-      const x = e.clientX - rect.left
-      const y = e.clientY - rect.top
-      glow.style.opacity = '1'
-      glow.style.background = `radial-gradient(500px circle at ${x}px ${y}px, rgba(160,120,255,0.25), rgba(100,60,220,0.08) 50%, transparent 70%)`
+      mouseRef.current.x = ((e.clientX - rect.left) / rect.width) * 2 - 1
+      mouseRef.current.y = -((e.clientY - rect.top) / rect.height) * 2 + 1
     }
-
-    const onMouseLeave = () => {
-      glow.style.opacity = '0'
+    const onMouseLeave = () => { mouseRef.current.x = 0; mouseRef.current.y = 0 }
+    const onTouchMove = (e: TouchEvent) => {
+      const rect = container.getBoundingClientRect()
+      const t = e.touches[0]
+      mouseRef.current.x = ((t.clientX - rect.left) / rect.width) * 2 - 1
+      mouseRef.current.y = -((t.clientY - rect.top) / rect.height) * 2 + 1
     }
-
-    container.addEventListener('mousemove', onMouseMove)
+    window.addEventListener('mousemove', onMouseMove)
     container.addEventListener('mouseleave', onMouseLeave)
+    window.addEventListener('touchmove', onTouchMove, { passive: true })
+
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    img.src = '/face-photo.png'
+    img.onload = () => {
+      const c = document.createElement('canvas')
+      const isMobile = window.innerWidth < 768
+      const sampleSize = isMobile ? 350 : 600
+      const aspect = img.height / img.width
+      c.width = sampleSize
+      c.height = Math.floor(sampleSize * aspect)
+      const ctx = c.getContext('2d')!
+      ctx.drawImage(img, 0, 0, c.width, c.height)
+      const data = ctx.getImageData(0, 0, c.width, c.height)
+
+      const step = isMobile ? 2 : 1
+      const imgW = c.width
+      const imgH = c.height
+      const spread = 3.8
+      const spreadY = spread * aspect
+
+      const positions: number[] = []
+      const randomStarts: number[] = []
+      const colors: number[] = []  // store actual pixel color
+      const sizes: number[] = []
+
+      for (let y = 0; y < imgH; y += step) {
+        for (let x = 0; x < imgW; x += step) {
+          const i = (y * imgW + x) * 4
+          const r = data.data[i]
+          const g = data.data[i + 1]
+          const b = data.data[i + 2]
+          const lum = (r + g + b) / 3
+
+          if (lum < 15) continue
+
+          const brightness = lum / 255
+
+          const px = (x / imgW - 0.5) * spread
+          const py = -(y / imgH - 0.5) * spreadY
+          const pz = brightness * 0.6 + (Math.random() - 0.5) * 0.15
+
+          positions.push(px, py, pz)
+          // Store actual RGB from image (normalized)
+          colors.push(r / 255, g / 255, b / 255)
+          sizes.push(0.8 + brightness * 1.2)
+
+          const theta = Math.random() * Math.PI * 2
+          const phi = Math.acos(2 * Math.random() - 1)
+          const rad = 5 + Math.random() * 4
+          randomStarts.push(
+            rad * Math.sin(phi) * Math.cos(theta),
+            rad * Math.sin(phi) * Math.sin(theta),
+            rad * Math.cos(phi)
+          )
+        }
+      }
+
+      console.log(`[ParticleHero] ${positions.length / 3} particles`)
+
+      const geo = new THREE.BufferGeometry()
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+      geo.setAttribute('aRandomStart', new THREE.Float32BufferAttribute(randomStarts, 3))
+      geo.setAttribute('aColor', new THREE.Float32BufferAttribute(colors, 3))
+      geo.setAttribute('aSize', new THREE.Float32BufferAttribute(sizes, 1))
+
+      mat = new THREE.ShaderMaterial({
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        uniforms: {
+          uTime: { value: 0 },
+          uFormProgress: { value: 0 },
+          uScroll: { value: 0 },
+          uMouse: { value: new THREE.Vector3(0, 0, 0) },
+          uPixelRatio: { value: Math.min(window.devicePixelRatio, 2) },
+        },
+        vertexShader: /* glsl */ `
+          attribute vec3 aColor;
+          attribute float aSize;
+          attribute vec3 aRandomStart;
+          uniform float uTime;
+          uniform float uFormProgress;
+          uniform float uScroll;
+          uniform vec3 uMouse;
+          uniform float uPixelRatio;
+          varying vec3 vColor;
+          varying float vGlow;
+          varying float vAlpha;
+
+          void main() {
+            float t = 1.0 - pow(1.0 - clamp(uFormProgress, 0.0, 1.0), 3.0);
+            vec3 pos = mix(aRandomStart, position, t);
+
+            // Subtle floating
+            pos.x += sin(uTime * 0.2 + position.y * 4.0) * 0.003;
+            pos.y += cos(uTime * 0.15 + position.x * 4.0) * 0.003;
+            pos.z += sin(uTime * 0.1 + position.x * position.y * 3.0) * 0.002;
+
+            vec4 mvPos = modelViewMatrix * vec4(pos, 1.0);
+            gl_Position = projectionMatrix * mvPos;
+
+            // Cursor glow
+            float mouseDist = distance(pos.xy, uMouse.xy);
+            vGlow = smoothstep(1.5, 0.0, mouseDist);
+
+            // Scroll glow
+            float scrollGlow = smoothstep(0.2, 0.6, uScroll) * 0.5;
+
+            float sz = aSize * (1.0 + vGlow * 1.5) * uPixelRatio;
+            gl_PointSize = sz * (1.0 / -mvPos.z);
+
+            // Use actual image color
+            vColor = aColor;
+
+            // Brightness from color luminance
+            float lum = dot(aColor, vec3(0.299, 0.587, 0.114));
+            vAlpha = (lum * 1.5 + vGlow * 0.4 + scrollGlow) * t;
+            vAlpha *= 1.0 - smoothstep(0.75, 1.0, uScroll);
+            vAlpha = clamp(vAlpha, 0.0, 1.0);
+          }
+        `,
+        fragmentShader: /* glsl */ `
+          uniform float uScroll;
+          varying vec3 vColor;
+          varying float vGlow;
+          varying float vAlpha;
+
+          void main() {
+            float d = length(gl_PointCoord - vec2(0.5));
+            if (d > 0.5) discard;
+            float strength = 1.0 - smoothstep(0.0, 0.5, d);
+            strength = pow(strength, 1.3);
+
+            // Use actual image color boosted brighter
+            vec3 color = vColor * 1.4;
+
+            // Cursor makes particles whiter
+            color = mix(color, vec3(1.0, 0.95, 1.0), vGlow * 0.4);
+
+            // Scroll white
+            float scrollWhite = smoothstep(0.4, 0.7, uScroll);
+            color = mix(color, vec3(1.0), scrollWhite);
+
+            gl_FragColor = vec4(color, vAlpha * strength);
+          }
+        `,
+      })
+
+      points = new THREE.Points(geo, mat)
+      scene.add(points)
+    }
+
+    function animate() {
+      const elapsed = (performance.now() - startTime) / 1000
+      const scroll = scrollYProgress.get()
+
+      if (mat) {
+        mat.uniforms.uTime.value = elapsed
+        mat.uniforms.uFormProgress.value = Math.min(1, elapsed / 2.5)
+        mat.uniforms.uScroll.value = scroll
+        camera.position.z = Math.max(-0.5, initialCamZ - scroll * 5.5)
+
+        const mouse3D = new THREE.Vector3(mouseRef.current.x, mouseRef.current.y, 0.5)
+        mouse3D.unproject(camera)
+        const dir = mouse3D.sub(camera.position).normalize()
+        const dist = -camera.position.z / dir.z
+        const worldMouse = camera.position.clone().add(dir.multiplyScalar(dist))
+        mat.uniforms.uMouse.value.set(worldMouse.x, worldMouse.y, 0)
+      }
+
+      if (points) {
+        points.rotation.y += (mouseRef.current.x * 0.1 - points.rotation.y) * 0.04
+        points.rotation.x += (-mouseRef.current.y * 0.06 - points.rotation.x) * 0.04
+      }
+
+      renderer.render(scene, camera)
+      animId = requestAnimationFrame(animate)
+    }
+    animate()
+
+    const onResize = () => {
+      const nw = container.clientWidth
+      const nh = container.clientHeight
+      renderer.setSize(nw, nh)
+      camera.aspect = nw / nh
+      camera.updateProjectionMatrix()
+    }
+    window.addEventListener('resize', onResize)
 
     return () => {
-      container.removeEventListener('mousemove', onMouseMove)
-      container.removeEventListener('mouseleave', onMouseLeave)
+      cancelAnimationFrame(animId)
+      window.removeEventListener('mousemove', onMouseMove)
+      window.removeEventListener('touchmove', onTouchMove)
+      window.removeEventListener('resize', onResize)
+      renderer.dispose()
+      if (renderer.domElement.parentNode) renderer.domElement.remove()
     }
-  }, [])
+  }, [scrollYProgress])
 
   return (
     <motion.section
@@ -67,51 +268,13 @@ export function ParticleHero() {
       style={{ height: '220vh', backgroundColor: bgColor }}
     >
       <div className="sticky top-0 h-screen overflow-hidden">
-        {/* Image container */}
-        <motion.div
-          ref={imageRef}
-          className="absolute inset-0 flex items-center justify-center"
-          style={{ scale: imageScale, opacity: imageOpacity, filter: imageFilter }}
-        >
-          {/* The particle-style portrait */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/face-photo.png"
-            alt=""
-            className="h-[95vh] w-auto max-w-none object-contain select-none pointer-events-none"
-            style={{ filter: 'brightness(1.4) contrast(1.2)' }}
-            draggable={false}
-          />
+        <div ref={containerRef} className="absolute inset-0" />
 
-          {/* Cursor glow overlay */}
-          <div
-            ref={glowRef}
-            className="absolute inset-0 transition-opacity duration-300 pointer-events-none"
-            style={{ opacity: 0 }}
-          />
-        </motion.div>
-
-        {/* Purple ambient backlight */}
         <div className="absolute inset-0 pointer-events-none">
-          <div
-            className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full blur-3xl"
-            style={{
-              width: '60%',
-              height: '70%',
-              background: 'radial-gradient(ellipse, rgba(100,60,220,0.18) 0%, rgba(80,40,180,0.06) 40%, transparent 70%)',
-            }}
-          />
-          <div
-            className="absolute top-[38%] left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full blur-2xl"
-            style={{
-              width: '30%',
-              height: '40%',
-              background: 'radial-gradient(ellipse, rgba(140,100,255,0.12) 0%, transparent 65%)',
-            }}
-          />
+          <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full blur-3xl"
+            style={{ width: '55%', height: '65%', background: 'radial-gradient(ellipse, rgba(100,60,220,0.12) 0%, transparent 70%)' }} />
         </div>
 
-        {/* Text — bottom left */}
         <motion.div
           className="absolute z-10 left-0 right-0 px-6 sm:px-10 lg:px-16"
           style={{ bottom: 48, opacity: textOpacity }}
@@ -125,19 +288,14 @@ export function ParticleHero() {
           <p className="text-[14px] sm:text-[16px] text-[#777] mb-6 max-w-md leading-relaxed">
             She learns your voice, writes daily posts, and delivers them to your WhatsApp.
           </p>
-          <Link
-            href="/sign-up"
-            className="inline-flex items-center gap-2 bg-white text-black text-[13px] px-6 py-2.5 rounded-lg font-medium hover:bg-white/90 transition-all hover:shadow-[0_0_24px_rgba(255,255,255,0.1)]"
-          >
+          <Link href="/sign-up"
+            className="inline-flex items-center gap-2 bg-white text-black text-[13px] px-6 py-2.5 rounded-lg font-medium hover:bg-white/90 transition-all hover:shadow-[0_0_24px_rgba(255,255,255,0.1)]">
             Say Hello Nivi <span className="text-[11px]">↗</span>
           </Link>
         </motion.div>
 
-        {/* Bottom fade */}
-        <div
-          className="absolute bottom-0 left-0 right-0 h-40 pointer-events-none"
-          style={{ background: 'linear-gradient(to top, rgba(10,10,10,0.9), transparent)' }}
-        />
+        <div className="absolute bottom-0 left-0 right-0 h-32 pointer-events-none"
+          style={{ background: 'linear-gradient(to top, rgba(10,10,10,0.8), transparent)' }} />
       </div>
     </motion.section>
   )
