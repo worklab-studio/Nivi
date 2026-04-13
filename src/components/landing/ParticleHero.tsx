@@ -18,8 +18,8 @@ export function ParticleHero() {
   const textOpacity = useTransform(scrollYProgress, [0, 0.3], [1, 0])
   const bgColor = useTransform(
     scrollYProgress,
-    [0, 0.5, 0.8, 1],
-    ['rgba(10,10,10,1)', 'rgba(10,10,10,1)', 'rgba(255,255,255,0.9)', 'rgba(255,255,255,1)']
+    [0, 0.4, 0.7, 0.85, 1],
+    ['rgba(10,10,10,1)', 'rgba(10,10,10,1)', 'rgba(40,40,50,1)', 'rgba(255,255,255,0.95)', 'rgba(255,255,255,1)']
   )
 
   useEffect(() => {
@@ -38,7 +38,8 @@ export function ParticleHero() {
 
     const scene = new THREE.Scene()
     const camera = new THREE.PerspectiveCamera(50, w / h, 0.1, 100)
-    camera.position.z = 5  // pull back so face is properly framed
+    camera.position.z = 5
+    const initialCamZ = 5
 
     let points: THREE.Points | null = null
     let mat: THREE.ShaderMaterial | null = null
@@ -233,9 +234,7 @@ export function ParticleHero() {
             pos.y += cos(drift * 0.8 + position.x * 3.0 + position.z) * 0.008;
             pos.z += sin(drift * 0.6 + position.x * position.y * 3.0) * 0.005;
 
-            // Scroll zoom
-            float zoom = 1.0 + uScroll * 3.0;
-            pos *= zoom;
+            // No particle scaling — camera moves forward instead
 
             vec4 mvPos = modelViewMatrix * vec4(pos, 1.0);
             gl_Position = projectionMatrix * mvPos;
@@ -252,10 +251,11 @@ export function ParticleHero() {
             float sz = aSize * (1.0 + vGlow * 1.8 + innerGlow * 0.5) * uPixelRatio;
             gl_PointSize = sz * (1.0 / -mvPos.z);
 
-            // Alpha: bright base, glow hotter on scroll, then fade
-            float scrollGlow = smoothstep(0.0, 0.5, uScroll) * 0.5; // brighter as you scroll
+            // Alpha: bright base + scroll glow (particles get brighter as camera zooms in)
+            float scrollGlow = smoothstep(0.2, 0.6, uScroll) * 0.8;
             vAlpha = (aAlpha * 1.2 + innerGlow * 0.6 + vGlow * 0.4 + scrollGlow) * t;
-            vAlpha *= 1.0 - smoothstep(0.65, 1.0, uScroll); // fade out at end
+            // Fade to white at the end (particles dissolve into white bg)
+            vAlpha *= 1.0 - smoothstep(0.75, 1.0, uScroll);
             vAlpha = clamp(vAlpha, 0.0, 1.0);
 
             vDepth = position.z;
@@ -287,8 +287,8 @@ export function ParticleHero() {
             // Cursor makes even brighter
             color = mix(color, vec3(1.0), vGlow * 0.5);
 
-            // Scroll: particles turn white-hot before fading
-            float scrollWhite = smoothstep(0.3, 0.7, uScroll);
+            // Scroll: particles turn white-hot as camera zooms through
+            float scrollWhite = smoothstep(0.3, 0.65, uScroll);
             color = mix(color, vec3(1.0, 0.98, 1.0), scrollWhite);
 
             // Depth: forward = brighter
@@ -308,10 +308,20 @@ export function ParticleHero() {
     function animate() {
       const elapsed = (performance.now() - startTime) / 1000
 
+      const scroll = scrollYProgress.get()
+
       if (mat) {
         mat.uniforms.uTime.value = elapsed
         mat.uniforms.uFormProgress.value = Math.min(1, elapsed / 2.5)
-        mat.uniforms.uScroll.value = scrollYProgress.get()
+        mat.uniforms.uScroll.value = scroll
+
+        // Camera zooms INTO the face — parallax effect
+        // 0% scroll: z=5 (normal view)
+        // 50% scroll: z=1.5 (close up on face)
+        // 80% scroll: z=0.3 (inside the particles)
+        // 100% scroll: z=-0.5 (through and past)
+        const targetZ = initialCamZ - scroll * 6.0
+        camera.position.z = Math.max(-0.5, targetZ)
 
         // Mouse → world space
         const mouse3D = new THREE.Vector3(mouseRef.current.x, mouseRef.current.y, 0.5)
@@ -359,7 +369,7 @@ export function ParticleHero() {
     <motion.section
       ref={sectionRef}
       className="relative"
-      style={{ height: '200vh', backgroundColor: bgColor }}
+      style={{ height: '250vh', backgroundColor: bgColor }}
     >
       <div className="sticky top-0 h-screen overflow-hidden">
         {/* Three.js canvas */}
@@ -389,8 +399,8 @@ export function ParticleHero() {
 
         {/* Text — bottom left, aligned with nav padding */}
         <motion.div
-          className="absolute z-10 bottom-12 sm:bottom-16 left-0 right-0 px-8 max-w-7xl mx-auto"
-          style={{ opacity: textOpacity }}
+          className="absolute z-10 left-0 right-0 px-5 sm:px-6"
+          style={{ bottom: 20, opacity: textOpacity }}
         >
           <p className="text-[10px] sm:text-[11px] text-[#666] uppercase tracking-[0.3em] font-medium mb-3">
             Your LinkedIn personal branding strategist
