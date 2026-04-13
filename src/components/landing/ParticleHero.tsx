@@ -73,7 +73,7 @@ export function ParticleHero() {
       const data = ctx.getImageData(0, 0, c.width, c.height)
 
       const isMobile = window.innerWidth < 768
-      const step = isMobile ? 4 : 2
+      const step = isMobile ? 3 : 1  // step=1 for maximum density on desktop
 
       const positions: number[] = []
       const randomStarts: number[] = []
@@ -117,11 +117,11 @@ export function ParticleHero() {
           )
           const centerBias = Math.max(0, 1 - centerDist) * 0.3
 
-          const pz = brightness * 0.6 - gradient * 0.3 + centerBias + (Math.random() - 0.5) * 0.12
+          const pz = brightness * 1.0 - gradient * 0.5 + centerBias + (Math.random() - 0.5) * 0.25
 
           positions.push(px, py, pz)
           alphas.push(brightness)
-          sizes.push(3.0 + brightness * 4.0)
+          sizes.push(1.2 + brightness * 1.5)  // small dense particles
 
           // Random start: spiral sphere
           const theta = Math.random() * Math.PI * 2
@@ -144,7 +144,7 @@ export function ParticleHero() {
       mat = new THREE.ShaderMaterial({
         transparent: true,
         depthWrite: false,
-        blending: THREE.NormalBlending,
+        blending: THREE.AdditiveBlending,
         uniforms: {
           uTime: { value: 0 },
           uFormProgress: { value: 0 },
@@ -172,9 +172,11 @@ export function ParticleHero() {
             float t = 1.0 - pow(1.0 - clamp(uFormProgress, 0.0, 1.0), 3.0);
             vec3 pos = mix(aRandomStart, position, t);
 
-            // Subtle breathing only
-            pos.x += sin(uTime * 0.4 + position.y * 2.0) * 0.006;
-            pos.y += cos(uTime * 0.3 + position.x * 2.0) * 0.006;
+            // Subtle constant drift — particles float gently
+            float drift = uTime * 0.15;
+            pos.x += sin(drift + position.y * 4.0 + position.z * 2.0) * 0.008;
+            pos.y += cos(drift * 0.8 + position.x * 3.0 + position.z) * 0.008;
+            pos.z += sin(drift * 0.6 + position.x * position.y * 3.0) * 0.005;
 
             // Scroll zoom
             float zoom = 1.0 + uScroll * 3.0;
@@ -185,15 +187,20 @@ export function ParticleHero() {
 
             // Mouse glow
             float mouseDist = distance(pos.xy, uMouse.xy);
-            vGlow = smoothstep(1.8, 0.0, mouseDist);
+            vGlow = smoothstep(2.0, 0.0, mouseDist);
 
-            // Point size: solid base, slightly bigger on glow
-            float sz = aSize * (1.0 + vGlow * 1.5) * uPixelRatio;
+            // Internal glow: center of face glows from within
+            float centerDist = length(position.xy);
+            float innerGlow = smoothstep(2.5, 0.0, centerDist) * 0.3;
+
+            // Point size
+            float sz = aSize * (1.0 + vGlow * 1.8 + innerGlow * 0.5) * uPixelRatio;
             gl_PointSize = sz * (1.0 / -mvPos.z);
 
-            // Alpha: ALWAYS VISIBLE (0.85 base) + extra glow
-            vAlpha = (aAlpha * 0.85 + vGlow * 0.15) * t;
+            // Alpha: always visible with inner glow + cursor boost
+            vAlpha = (aAlpha * 0.6 + innerGlow + vGlow * 0.4) * t;
             vAlpha *= 1.0 - smoothstep(0.55, 1.0, uScroll);
+            vAlpha = clamp(vAlpha, 0.0, 1.0);
 
             vDepth = position.z;
           }
@@ -210,13 +217,17 @@ export function ParticleHero() {
             float strength = 1.0 - smoothstep(0.0, 0.5, d);
             strength = pow(strength, 1.5);
 
-            // Color: visible lavender base → bright white on glow
-            vec3 base = vec3(0.7, 0.65, 0.85);
-            vec3 bright = vec3(1.0, 0.98, 1.0);
-            vec3 color = mix(base, bright, vGlow);
+            // Color: blue-purple base → bright cool white on glow
+            vec3 base = vec3(0.45, 0.42, 0.7);       // blue-purple
+            vec3 innerColor = vec3(0.6, 0.55, 0.85);  // lighter purple for inner glow
+            vec3 bright = vec3(0.9, 0.88, 1.0);       // cool white
 
-            // Depth tint: forward particles slightly brighter
-            color += vDepth * vec3(0.12, 0.1, 0.18);
+            // Mix based on depth + glow
+            vec3 color = mix(base, innerColor, smoothstep(-0.3, 0.5, vDepth));
+            color = mix(color, bright, vGlow);
+
+            // Depth luminance: forward particles brighter
+            color += vDepth * vec3(0.08, 0.06, 0.12);
 
             gl_FragColor = vec4(color, vAlpha * strength);
           }
@@ -294,9 +305,9 @@ export function ParticleHero() {
           <div
             className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full"
             style={{
-              width: '50%',
-              height: '60%',
-              background: 'radial-gradient(ellipse, rgba(100,80,160,0.06) 0%, transparent 70%)',
+              width: '60%',
+              height: '70%',
+              background: 'radial-gradient(ellipse, rgba(80,60,180,0.12) 0%, rgba(60,40,140,0.04) 40%, transparent 70%)',
             }}
           />
         </div>
