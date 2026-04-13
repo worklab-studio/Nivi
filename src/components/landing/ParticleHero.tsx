@@ -63,159 +63,225 @@ export function ParticleHero() {
     container.addEventListener('mouseleave', onMouseLeave)
     window.addEventListener('touchmove', onTouchMove, { passive: true })
 
-    // Load GLB model
-    const loader = new GLTFLoader()
-    loader.load(
-      '/nivi-model.bin',
-      (gltf) => {
-        console.log('[ParticleHero] Model loaded')
+    const positions: number[] = []
+    const randomStarts: number[] = []
+    const alphas: number[] = []
+    const sizes: number[] = []
+    let loadedCount = 0
 
-        // Find mesh
-        let meshGeo: THREE.BufferGeometry | null = null
-        gltf.scene.traverse((child) => {
-          if (child instanceof THREE.Mesh && child.geometry && !meshGeo) {
-            meshGeo = child.geometry
+    function addRandomStart() {
+      const theta = Math.random() * Math.PI * 2
+      const phi = Math.acos(2 * Math.random() - 1)
+      const r = 6 + Math.random() * 5
+      randomStarts.push(
+        r * Math.sin(phi) * Math.cos(theta),
+        r * Math.sin(phi) * Math.sin(theta),
+        r * Math.cos(phi)
+      )
+    }
+
+    function buildPoints() {
+      if (loadedCount < 2) return // wait for both sources
+      console.log(`[ParticleHero] Total particles: ${positions.length / 3}`)
+
+      const geo = new THREE.BufferGeometry()
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+      geo.setAttribute('aRandomStart', new THREE.Float32BufferAttribute(randomStarts, 3))
+      geo.setAttribute('aAlpha', new THREE.Float32BufferAttribute(alphas, 1))
+      geo.setAttribute('aSize', new THREE.Float32BufferAttribute(sizes, 1))
+
+      mat = new THREE.ShaderMaterial({
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        uniforms: {
+          uTime: { value: 0 },
+          uFormProgress: { value: 0 },
+          uScroll: { value: 0 },
+          uMouse: { value: new THREE.Vector3(0, 0, 0) },
+          uPixelRatio: { value: Math.min(window.devicePixelRatio, 2) },
+        },
+        vertexShader: /* glsl */ `
+          attribute float aAlpha;
+          attribute float aSize;
+          attribute vec3 aRandomStart;
+          uniform float uTime;
+          uniform float uFormProgress;
+          uniform float uScroll;
+          uniform vec3 uMouse;
+          uniform float uPixelRatio;
+          varying float vAlpha;
+          varying float vGlow;
+          varying float vDepth;
+
+          void main() {
+            float t = 1.0 - pow(1.0 - clamp(uFormProgress, 0.0, 1.0), 3.0);
+            vec3 pos = mix(aRandomStart, position, t);
+
+            pos.x += sin(uTime * 0.15 + position.y * 3.0) * 0.004;
+            pos.y += cos(uTime * 0.12 + position.x * 3.0) * 0.004;
+
+            vec4 mvPos = modelViewMatrix * vec4(pos, 1.0);
+            gl_Position = projectionMatrix * mvPos;
+
+            float mouseDist = distance(pos.xy, uMouse.xy);
+            vGlow = smoothstep(2.0, 0.0, mouseDist);
+
+            float centerDist = length(position.xy);
+            float innerGlow = smoothstep(2.0, 0.0, centerDist) * 0.3;
+            float scrollGlow = smoothstep(0.2, 0.6, uScroll) * 0.8;
+
+            float sz = aSize * (1.0 + vGlow * 2.0 + innerGlow) * uPixelRatio;
+            gl_PointSize = sz * (1.0 / -mvPos.z);
+
+            vAlpha = (aAlpha * 1.3 + innerGlow * 0.5 + vGlow * 0.5 + scrollGlow) * t;
+            vAlpha *= 1.0 - smoothstep(0.75, 1.0, uScroll);
+            vAlpha = clamp(vAlpha, 0.0, 1.0);
+            vDepth = position.z;
           }
-        })
-        if (!meshGeo) return
+        `,
+        fragmentShader: /* glsl */ `
+          uniform float uScroll;
+          varying float vAlpha;
+          varying float vGlow;
+          varying float vDepth;
 
-        const posAttr = (meshGeo as THREE.BufferGeometry).attributes.position
-        if (!posAttr) return
+          void main() {
+            float d = length(gl_PointCoord - vec2(0.5));
+            if (d > 0.5) discard;
+            float strength = 1.0 - smoothstep(0.0, 0.5, d);
+            strength = pow(strength, 1.2);
 
-        ;(meshGeo as THREE.BufferGeometry).computeBoundingBox()
-        const box = (meshGeo as THREE.BufferGeometry).boundingBox!
-        const size = box.getSize(new THREE.Vector3())
-        const center = box.getCenter(new THREE.Vector3())
-        const maxDim = Math.max(size.x, size.y, size.z)
-        const scale = 3.8 / maxDim
+            vec3 shadow = vec3(0.35, 0.2, 0.6);
+            vec3 mid = vec3(0.55, 0.4, 0.85);
+            vec3 highlight = vec3(0.75, 0.65, 1.0);
 
-        const isMobile = window.innerWidth < 768
-        const totalVerts = posAttr.count
-        const maxP = isMobile ? 40000 : 200000
-        const skip = Math.max(1, Math.floor(totalVerts / maxP))
+            vec3 color = mix(shadow, mid, smoothstep(0.2, 0.5, vAlpha));
+            color = mix(color, highlight, smoothstep(0.5, 0.9, vAlpha));
+            color = mix(color, vec3(0.85, 0.78, 1.0), vGlow * 0.6);
 
-        console.log(`[ParticleHero] ${totalVerts} verts, using ${Math.floor(totalVerts / skip)} particles`)
+            float scrollWhite = smoothstep(0.3, 0.65, uScroll);
+            color = mix(color, vec3(1.0), scrollWhite);
+            color += vDepth * vec3(0.05, 0.03, 0.1);
 
-        const positions: number[] = []
-        const randomStarts: number[] = []
-        const alphas: number[] = []
-        const sizes: number[] = []
+            gl_FragColor = vec4(color, vAlpha * strength);
+          }
+        `,
+      })
 
-        for (let i = 0; i < totalVerts; i += skip) {
-          const x = (posAttr.getX(i) - center.x) * scale
-          const y = (posAttr.getY(i) - center.y) * scale
-          const z = (posAttr.getZ(i) - center.z) * scale
+      points = new THREE.Points(geo, mat)
+      scene.add(points)
+    }
 
-          const ny = (posAttr.getY(i) - box.min.y) / size.y
-          const nz = (posAttr.getZ(i) - box.min.z) / size.z
-          const brightness = 0.6 + ny * 0.25 + nz * 0.15
+    // ── SOURCE 1: 3D Model (hair, body, outline) ──
+    const loader = new GLTFLoader()
+    loader.load('/nivi-model.bin', (gltf) => {
+      let meshGeo: THREE.BufferGeometry | null = null
+      gltf.scene.traverse((child) => {
+        if (child instanceof THREE.Mesh && child.geometry && !meshGeo) meshGeo = child.geometry
+      })
+      if (!meshGeo) { loadedCount++; buildPoints(); return }
 
-          positions.push(x, y, z)
-          alphas.push(brightness)
-          sizes.push(1.5 + brightness * 2.0)
+      const posAttr = (meshGeo as THREE.BufferGeometry).attributes.position
+      if (!posAttr) { loadedCount++; buildPoints(); return }
 
-          const theta = Math.random() * Math.PI * 2
-          const phi = Math.acos(2 * Math.random() - 1)
-          const r = 6 + Math.random() * 5
-          randomStarts.push(
-            r * Math.sin(phi) * Math.cos(theta),
-            r * Math.sin(phi) * Math.sin(theta),
-            r * Math.cos(phi)
-          )
+      ;(meshGeo as THREE.BufferGeometry).computeBoundingBox()
+      const box = (meshGeo as THREE.BufferGeometry).boundingBox!
+      const sz = box.getSize(new THREE.Vector3())
+      const center = box.getCenter(new THREE.Vector3())
+      const maxDim = Math.max(sz.x, sz.y, sz.z)
+      const scale = 3.8 / maxDim
+
+      const isMobile = window.innerWidth < 768
+      const totalVerts = posAttr.count
+      const maxP = isMobile ? 30000 : 120000
+      const skip = Math.max(1, Math.floor(totalVerts / maxP))
+
+      console.log(`[ParticleHero] 3D model: ${Math.floor(totalVerts / skip)} particles`)
+
+      for (let i = 0; i < totalVerts; i += skip) {
+        const x = (posAttr.getX(i) - center.x) * scale
+        const y = (posAttr.getY(i) - center.y) * scale
+        const z = (posAttr.getZ(i) - center.z) * scale
+
+        const ny = (posAttr.getY(i) - box.min.y) / sz.y
+        const nz = (posAttr.getZ(i) - box.min.z) / sz.z
+        const brightness = 0.55 + ny * 0.25 + nz * 0.2
+
+        positions.push(x, y, z)
+        alphas.push(brightness)
+        sizes.push(1.2 + brightness * 1.5)
+        addRandomStart()
+      }
+
+      loadedCount++
+      buildPoints()
+    }, undefined, () => { loadedCount++; buildPoints() })
+
+    // ── SOURCE 2: 2D Photo (face detail — eyes, nose, lips) ──
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    img.src = '/face-photo.png'
+    img.onload = () => {
+      const c = document.createElement('canvas')
+      const sampleSize = 500
+      const aspect = img.height / img.width
+      c.width = sampleSize
+      c.height = sampleSize * aspect
+      const ctx = c.getContext('2d')!
+      ctx.drawImage(img, 0, 0, c.width, c.height)
+      const data = ctx.getImageData(0, 0, c.width, c.height)
+
+      const isMobile = window.innerWidth < 768
+      const step = isMobile ? 3 : 2
+
+      const imgW = c.width
+      const imgH = c.height
+      // Map face photo to the center-upper area of the 3D model space
+      const faceSpread = 2.4
+      const faceSpreadY = faceSpread * aspect
+      const faceOffsetY = 0.4 // shift face up to align with model head
+
+      const getLum = (x: number, y: number) => {
+        if (x < 0 || x >= imgW || y < 0 || y >= imgH) return 0
+        const i = (y * imgW + x) * 4
+        return (data.data[i] + data.data[i + 1] + data.data[i + 2]) / 3
+      }
+
+      let faceParticles = 0
+      for (let y = 0; y < imgH; y += step) {
+        for (let x = 0; x < imgW; x += step) {
+          const lum = getLum(x, y)
+          if (lum < 8) continue
+
+          const brightness = Math.pow(lum / 255, 0.7) // gamma boost for dark areas
+
+          const px = (x / imgW - 0.5) * faceSpread
+          const py = -(y / imgH - 0.5) * faceSpreadY + faceOffsetY
+
+          // Depth from brightness + edge gradient
+          const gx = getLum(x + step, y) - getLum(x - step, y)
+          const gy = getLum(x, y + step) - getLum(x, y - step)
+          const gradient = Math.sqrt(gx * gx + gy * gy) / 255
+          const centerDist = Math.sqrt(Math.pow((x / imgW - 0.5) * 2, 2) + Math.pow((y / imgH - 0.45) * 2, 2))
+          const centerBias = Math.max(0, 1 - centerDist) * 0.3
+          const pz = brightness * 0.8 - gradient * 0.4 + centerBias + (Math.random() - 0.5) * 0.15
+
+          positions.push(px, py, pz)
+          alphas.push(brightness * 0.9 + 0.1)
+          sizes.push(1.0 + brightness * 1.8)
+          addRandomStart()
+          faceParticles++
         }
+      }
 
-        const geo = new THREE.BufferGeometry()
-        geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
-        geo.setAttribute('aRandomStart', new THREE.Float32BufferAttribute(randomStarts, 3))
-        geo.setAttribute('aAlpha', new THREE.Float32BufferAttribute(alphas, 1))
-        geo.setAttribute('aSize', new THREE.Float32BufferAttribute(sizes, 1))
+      console.log(`[ParticleHero] Face photo: ${faceParticles} particles`)
+      loadedCount++
+      buildPoints()
+    }
+    img.onerror = () => { loadedCount++; buildPoints() }
 
-        mat = new THREE.ShaderMaterial({
-          transparent: true,
-          depthWrite: false,
-          blending: THREE.AdditiveBlending,
-          uniforms: {
-            uTime: { value: 0 },
-            uFormProgress: { value: 0 },
-            uScroll: { value: 0 },
-            uMouse: { value: new THREE.Vector3(0, 0, 0) },
-            uPixelRatio: { value: Math.min(window.devicePixelRatio, 2) },
-          },
-          vertexShader: /* glsl */ `
-            attribute float aAlpha;
-            attribute float aSize;
-            attribute vec3 aRandomStart;
-            uniform float uTime;
-            uniform float uFormProgress;
-            uniform float uScroll;
-            uniform vec3 uMouse;
-            uniform float uPixelRatio;
-            varying float vAlpha;
-            varying float vGlow;
-            varying float vDepth;
-
-            void main() {
-              float t = 1.0 - pow(1.0 - clamp(uFormProgress, 0.0, 1.0), 3.0);
-              vec3 pos = mix(aRandomStart, position, t);
-
-              pos.x += sin(uTime * 0.15 + position.y * 3.0) * 0.005;
-              pos.y += cos(uTime * 0.12 + position.x * 3.0) * 0.005;
-
-              vec4 mvPos = modelViewMatrix * vec4(pos, 1.0);
-              gl_Position = projectionMatrix * mvPos;
-
-              float mouseDist = distance(pos.xy, uMouse.xy);
-              vGlow = smoothstep(2.0, 0.0, mouseDist);
-
-              float centerDist = length(position.xy);
-              float innerGlow = smoothstep(2.0, 0.0, centerDist) * 0.25;
-              float scrollGlow = smoothstep(0.2, 0.6, uScroll) * 0.8;
-
-              float sz = aSize * (1.0 + vGlow * 2.0 + innerGlow) * uPixelRatio;
-              gl_PointSize = sz * (1.0 / -mvPos.z);
-
-              vAlpha = (aAlpha * 1.4 + innerGlow * 0.5 + vGlow * 0.5 + scrollGlow) * t;
-              vAlpha *= 1.0 - smoothstep(0.75, 1.0, uScroll);
-              vAlpha = clamp(vAlpha, 0.0, 1.0);
-              vDepth = position.z;
-            }
-          `,
-          fragmentShader: /* glsl */ `
-            uniform float uScroll;
-            varying float vAlpha;
-            varying float vGlow;
-            varying float vDepth;
-
-            void main() {
-              float d = length(gl_PointCoord - vec2(0.5));
-              if (d > 0.5) discard;
-              float strength = 1.0 - smoothstep(0.0, 0.5, d);
-              strength = pow(strength, 1.2);
-
-              vec3 shadow = vec3(0.35, 0.2, 0.6);
-              vec3 mid = vec3(0.55, 0.4, 0.85);
-              vec3 highlight = vec3(0.75, 0.65, 1.0);
-
-              vec3 color = mix(shadow, mid, smoothstep(0.2, 0.5, vAlpha));
-              color = mix(color, highlight, smoothstep(0.5, 0.9, vAlpha));
-              color = mix(color, vec3(0.85, 0.78, 1.0), vGlow * 0.6);
-
-              float scrollWhite = smoothstep(0.3, 0.65, uScroll);
-              color = mix(color, vec3(1.0), scrollWhite);
-              color += vDepth * vec3(0.05, 0.03, 0.1);
-
-              gl_FragColor = vec4(color, vAlpha * strength);
-            }
-          `,
-        })
-
-        points = new THREE.Points(geo, mat)
-        scene.add(points)
-      },
-      (p) => console.log(`[ParticleHero] Loading: ${Math.round((p.loaded / (p.total || 1)) * 100)}%`),
-      (err) => console.error('[ParticleHero] Error:', err)
-    )
-
+    // Render loop
     function animate() {
       const elapsed = (performance.now() - startTime) / 1000
       const scroll = scrollYProgress.get()
@@ -235,8 +301,8 @@ export function ParticleHero() {
       }
 
       if (points) {
-        points.rotation.y += (mouseRef.current.x * 0.2 - points.rotation.y) * 0.04
-        points.rotation.x += (-mouseRef.current.y * 0.12 - points.rotation.x) * 0.04
+        points.rotation.y += (mouseRef.current.x * 0.15 - points.rotation.y) * 0.04
+        points.rotation.x += (-mouseRef.current.y * 0.1 - points.rotation.x) * 0.04
       }
 
       renderer.render(scene, camera)
@@ -272,6 +338,7 @@ export function ParticleHero() {
       <div className="sticky top-0 h-screen overflow-hidden">
         <div ref={containerRef} className="absolute inset-0" />
 
+        {/* Purple backlight glow */}
         <div className="absolute inset-0 pointer-events-none">
           <div className="absolute top-[38%] left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full blur-3xl"
             style={{ width: '70%', height: '80%', background: 'radial-gradient(ellipse, rgba(120,80,220,0.15) 0%, rgba(80,40,180,0.05) 40%, transparent 70%)' }} />
@@ -279,6 +346,7 @@ export function ParticleHero() {
             style={{ width: '40%', height: '50%', background: 'radial-gradient(ellipse, rgba(140,100,255,0.2) 0%, rgba(100,60,200,0.08) 50%, transparent 75%)' }} />
         </div>
 
+        {/* Text */}
         <motion.div
           className="absolute z-10 left-0 right-0 px-6 sm:px-10 lg:px-16"
           style={{ bottom: 48, opacity: textOpacity }}
