@@ -5,7 +5,6 @@ import Link from 'next/link'
 import { motion, useScroll, useTransform } from 'framer-motion'
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
-import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js'
 
 export function ParticleHero() {
   const sectionRef = useRef<HTMLElement>(null)
@@ -65,11 +64,8 @@ export function ParticleHero() {
     container.addEventListener('mouseleave', onMouseLeave)
     window.addEventListener('touchmove', onTouchMove, { passive: true })
 
-    // Load 3D model (Draco compressed)
-    const dracoLoader = new DRACOLoader()
-    dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/')
+    // Load 3D model (quantized, no Draco)
     const loader = new GLTFLoader()
-    loader.setDRACOLoader(dracoLoader)
     loader.load('/nivi-model.glb', (gltf) => {
       console.log('[ParticleHero] GLB loaded, traversing scene...')
       // Extract all vertices from the model
@@ -97,7 +93,7 @@ export function ParticleHero() {
 
       const isMobile = window.innerWidth < 768
       const totalVerts = posAttr.count
-      const maxParticles = isMobile ? 30000 : 80000
+      const maxParticles = isMobile ? 20000 : 50000
       const skip = Math.max(1, Math.floor(totalVerts / maxParticles))
 
       console.log(`[ParticleHero] Sampling ${Math.floor(totalVerts / skip)} of ${totalVerts} vertices`)
