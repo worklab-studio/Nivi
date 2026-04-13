@@ -11,7 +11,10 @@ export default async function LandingPage() {
     <div className="min-h-screen bg-[#0a0a0a] text-white overflow-hidden">
       {/* ──── NAV ──── */}
       <nav className="flex items-center justify-between px-8 py-5 max-w-7xl mx-auto">
-        <span className="font-sans text-2xl font-bold tracking-tight">Nivi</span>
+        <span className="flex items-center gap-2">
+          <img src="/logo.svg" alt="" className="w-6 h-6" />
+          <span className="font-sans text-xl font-semibold tracking-tight">hello nivi</span>
+        </span>
         <div className="flex items-center gap-6">
           <Link href="#features" className="text-sm text-[#888] hover:text-white transition-colors hidden sm:block">Features</Link>
           <Link href="#how" className="text-sm text-[#888] hover:text-white transition-colors hidden sm:block">How it works</Link>
@@ -30,7 +33,7 @@ export default async function LandingPage() {
 
         <div className="inline-flex items-center gap-2 border border-[#333] rounded-full px-4 py-1.5 mb-8 relative">
           <span className="w-2 h-2 rounded-full bg-[#22c55e] animate-pulse" />
-          <span className="text-xs text-[#a0a0a0] font-sans">Your AI LinkedIn brand strategist</span>
+          <span className="text-xs text-[#a0a0a0] font-sans">Your AI LinkedIn brand strategist — hellonivi.com</span>
         </div>
 
         <h1 className="font-sans text-[56px] sm:text-[72px] font-bold leading-[1.05] tracking-tight mb-6 relative">
@@ -269,13 +272,16 @@ export default async function LandingPage() {
       {/* ──── FOOTER ──── */}
       <footer className="border-t border-[#1a1a1a]">
         <div className="max-w-6xl mx-auto px-8 py-10 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <span className="font-sans text-lg font-bold text-[#444]">Nivi</span>
+          <span className="flex items-center gap-1.5">
+            <img src="/logo.svg" alt="" className="w-4 h-4 opacity-40" />
+            <span className="font-sans text-sm font-semibold text-[#444]">hello nivi</span>
+          </span>
           <div className="flex items-center gap-6 text-[12px] text-[#555]">
             <Link href="/pricing" className="hover:text-white transition-colors">Pricing</Link>
             <Link href="/sign-in" className="hover:text-white transition-colors">Sign in</Link>
             <Link href="/sign-up" className="hover:text-white transition-colors">Get started</Link>
           </div>
-          <p className="text-xs text-[#444]">&copy; 2026 Nivi. All rights reserved.</p>
+          <p className="text-xs text-[#444]">&copy; 2026 hello nivi. All rights reserved.</p>
         </div>
       </footer>
     </div>

@@ -69,7 +69,11 @@ export default function PricingPage() {
     <div className="min-h-screen bg-[#0a0a0a] text-white">
       {/* Nav */}
       <nav className="flex items-center justify-between px-8 py-5 max-w-6xl mx-auto">
-        <Link href="/" className="font-sans text-2xl font-bold">Nivi</Link>
+        <Link href="/" className="flex items-center gap-2">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.svg" alt="" className="w-6 h-6" />
+          <span className="font-sans text-xl font-semibold tracking-tight">hello nivi</span>
+        </Link>
         <div className="flex items-center gap-6">
           {isSignedIn ? (
             <Link href="/overview" className="text-sm text-[#888] hover:text-white transition-colors">Dashboard</Link>

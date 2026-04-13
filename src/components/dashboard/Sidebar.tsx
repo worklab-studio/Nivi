@@ -52,12 +52,13 @@ export function Sidebar() {
     <aside className="fixed left-0 top-0 h-full w-[220px] bg-card border-r border-border flex flex-col z-50">
       {/* Brand */}
       <div className="h-14 flex items-center gap-2.5 px-4 shrink-0">
-        <Link href="/overview" className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center text-primary-foreground text-[13px] font-bold">
-            N
+        <Link href="/overview" className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center shrink-0">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo.svg" alt="Nivi" className="w-4 h-4" />
           </div>
-          <span className="text-[16px] font-semibold text-foreground tracking-tight">
-            Nivi
+          <span className="text-[15px] font-semibold text-foreground tracking-tight">
+            hello nivi
           </span>
         </Link>
       </div>
