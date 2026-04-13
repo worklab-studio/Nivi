@@ -1,12 +1,11 @@
 import { getSupabaseAdmin } from '@/lib/supabase/admin'
 import { sendWhatsApp } from '@/lib/whatsapp/send'
-import { handleConversation } from '@/lib/whatsapp/handlers/conversation'
 
-export const maxDuration = 300 // 5 min on Pro plan
+export const maxDuration = 300
 
 /**
- * Polls Unipile for new WhatsApp messages.
- * Runs every minute via cron, polls 6 times internally (every ~9s).
+ * Simple polling — bypasses the complex handleConversation.
+ * Calls Anthropic directly for a reply.
  */
 export async function GET(req: Request) {
   const authHeader = req.headers.get('authorization')
@@ -17,22 +16,19 @@ export async function GET(req: Request) {
 
   const BASE_URL = process.env.UNIPILE_BASE_URL!
   const API_KEY = process.env.UNIPILE_API_KEY!
+  const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY!
   const headers = { 'X-API-KEY': API_KEY, accept: 'application/json' }
   const supabase = getSupabaseAdmin()
 
-  // Get WhatsApp account ID
+  // Get WhatsApp account
   let waAccountId: string | null = null
   try {
     const res = await fetch(`${BASE_URL}/api/v1/accounts`, { headers })
     const data = await res.json()
-    const wa = (data.items ?? []).find((a: { type: string }) => a.type === 'WHATSAPP')
-    waAccountId = wa?.id ?? null
-  } catch {
-    return Response.json({ ok: false, error: 'accounts fetch failed' })
-  }
-  if (!waAccountId) return Response.json({ ok: false, error: 'no wa account' })
+    waAccountId = (data.items ?? []).find((a: { type: string }) => a.type === 'WHATSAPP')?.id ?? null
+  } catch { return Response.json({ ok: false, error: 'accounts' }) }
+  if (!waAccountId) return Response.json({ ok: false, error: 'no wa' })
 
-  // Track processed message IDs to avoid duplicates within this run
   const processedIds = new Set<string>()
   let totalProcessed = 0
 
@@ -40,28 +36,21 @@ export async function GET(req: Request) {
     if (poll > 0) await new Promise((r) => setTimeout(r, 9000))
 
     try {
-      // Get recent chats
-      const chatsRes = await fetch(
-        `${BASE_URL}/api/v1/chats?account_id=${waAccountId}&limit=10`,
-        { headers }
-      )
+      const chatsRes = await fetch(`${BASE_URL}/api/v1/chats?account_id=${waAccountId}&limit=10`, { headers })
       const chats = (await chatsRes.json()).items ?? []
 
       for (const chat of chats) {
-        // Extract phone from provider_id (e.g. "919729072096@s.whatsapp.net")
-        const providerId = (chat.provider_id ?? chat.attendee_provider_id ?? '') as string
+        const providerId = (chat.provider_id ?? '') as string
         const phone = providerId.replace(/@.*$/, '').replace(/^\+/, '')
         if (!phone || phone.length < 10) continue
 
-        // Find user by phone
         const { data: user } = await supabase
           .from('users')
-          .select('id, name, whatsapp_number, plan, timezone, niche, streak_count, onboarding_complete')
+          .select('id, name, whatsapp_number')
           .eq('whatsapp_number', phone)
           .single()
         if (!user) continue
 
-        // Get latest messages
         const msgRes = await fetch(
           `${BASE_URL}/api/v1/chats/${chat.id}/messages?account_id=${waAccountId}&limit=3`,
           { headers }
@@ -70,16 +59,13 @@ export async function GET(req: Request) {
 
         for (const msg of messages) {
           if (msg.is_sender) continue
-          if (!msg.text || !msg.text.trim()) continue
+          if (!msg.text?.trim()) continue
+          if (processedIds.has(msg.id)) continue
 
-          const msgId = msg.id ?? ''
-          if (processedIds.has(msgId)) continue
-
-          // Skip messages older than 2 minutes
           const msgTime = msg.timestamp ? new Date(msg.timestamp).getTime() : 0
           if (msgTime && msgTime < Date.now() - 120000) continue
 
-          // Dedup: check if we already have this exact message in conversations
+          // Dedup
           const { data: existing } = await supabase
             .from('conversations')
             .select('id')
@@ -90,27 +76,64 @@ export async function GET(req: Request) {
             .limit(1)
           if (existing && existing.length > 0) continue
 
-          processedIds.add(msgId)
+          processedIds.add(msg.id)
           console.log(`[poll-wa] ${phone}: "${msg.text.slice(0, 40)}"`)
 
+          // Save user message
+          await supabase.from('conversations').insert({
+            user_id: user.id,
+            role: 'user',
+            content: msg.text,
+          })
+
+          // Get recent conversation history
+          const { data: history } = await supabase
+            .from('conversations')
+            .select('role, content')
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: false })
+            .limit(10)
+
+          const chatHistory = (history ?? [])
+            .reverse()
+            .filter((h) => h.content?.trim())
+            .map((h) => ({ role: h.role as 'user' | 'assistant', content: h.content }))
+
+          // Call Anthropic directly — simple and reliable
           try {
-            console.log(`[poll-wa] calling handleConversation for ${phone}...`)
-            const resp = await handleConversation(
-              user.id,
-              { whatsapp_number: phone, name: user.name, chatId: chat.id },
-              msg.text
-            )
-            console.log(`[poll-wa] handleConversation returned status: ${resp?.status}`)
-            totalProcessed++
-            console.log(`[poll-wa] replied to ${phone}`)
+            const anthropicRes = await fetch('https://api.anthropic.com/v1/messages', {
+              method: 'POST',
+              headers: {
+                'x-api-key': ANTHROPIC_KEY,
+                'anthropic-version': '2023-06-01',
+                'content-type': 'application/json',
+              },
+              body: JSON.stringify({
+                model: 'claude-sonnet-4-5',
+                max_tokens: 1024,
+                system: `You are Nivi — a warm, sharp, confident AI LinkedIn brand strategist. You chat on WhatsApp with ${user.name}. Keep replies short (2-4 sentences), casual, friendly. Use their name sometimes. Never say you're an AI. Be helpful about LinkedIn, content, personal branding.`,
+                messages: chatHistory,
+              }),
+            })
+
+            const anthropicData = await anthropicRes.json()
+            const reply = anthropicData.content?.[0]?.text ?? ''
+
+            if (reply) {
+              // Save assistant reply
+              await supabase.from('conversations').insert({
+                user_id: user.id,
+                role: 'assistant',
+                content: reply,
+              })
+
+              // Send via WhatsApp
+              await sendWhatsApp(phone, reply, chat.id)
+              totalProcessed++
+              console.log(`[poll-wa] replied to ${phone}: "${reply.slice(0, 40)}"`)
+            }
           } catch (err) {
-            const errMsg = (err as Error).message ?? String(err)
-            const errStack = (err as Error).stack ?? ''
-            console.error('[poll-wa] handleConversation FAILED:', errMsg.slice(0, 200))
-            console.error('[poll-wa] stack:', errStack.slice(0, 300))
-            try {
-              await sendWhatsApp(phone, 'oops, something glitched. try again?', chat.id)
-            } catch { /* ignore */ }
+            console.error('[poll-wa] anthropic error:', (err as Error).message)
           }
         }
       }
