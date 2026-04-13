@@ -93,7 +93,7 @@ export function ParticleHero() {
 
       const isMobile = window.innerWidth < 768
       const totalVerts = posAttr.count
-      const maxParticles = isMobile ? 30000 : 85000
+      const maxParticles = isMobile ? 40000 : 150000  // use almost all vertices for face detail
       const skip = Math.max(1, Math.floor(totalVerts / maxParticles))
 
       console.log(`[ParticleHero] Sampling ${Math.floor(totalVerts / skip)} of ${totalVerts} vertices`)
@@ -110,7 +110,7 @@ export function ParticleHero() {
 
         positions.push(x, y, z)
         alphas.push(brightness)
-        sizes.push(2.0 + brightness * 3.0)
+        sizes.push(1.5 + brightness * 2.0)  // smaller for density at 150K particles
 
         // Random start position (sphere for entrance animation)
         const theta = Math.random() * Math.PI * 2
