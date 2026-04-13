@@ -95,18 +95,21 @@ export function ParticleHero() {
           const b = data.data[i + 2]
           const lum = (r + g + b) / 3
 
-          if (lum < 15) continue
+          if (lum < 10) continue
 
-          const brightness = lum / 255
+          const brightness = Math.pow(lum / 255, 0.6) // gamma boost darks
 
           const px = (x / imgW - 0.5) * spread
           const py = -(y / imgH - 0.5) * spreadY
-          const pz = brightness * 0.6 + (Math.random() - 0.5) * 0.15
+
+          // Strong 3D depth
+          const centerDist = Math.sqrt(Math.pow((x / imgW - 0.5) * 2, 2) + Math.pow((y / imgH - 0.4) * 2, 2))
+          const centerBias = Math.max(0, 1 - centerDist) * 0.5
+          const pz = brightness * 1.2 + centerBias + (Math.random() - 0.5) * 0.2
 
           positions.push(px, py, pz)
-          // Store actual RGB from image (normalized)
           colors.push(r / 255, g / 255, b / 255)
-          sizes.push(0.8 + brightness * 1.2)
+          sizes.push(2.0 + brightness * 3.0) // bigger particles
 
           const theta = Math.random() * Math.PI * 2
           const phi = Math.acos(2 * Math.random() - 1)
@@ -156,29 +159,37 @@ export function ParticleHero() {
             vec3 pos = mix(aRandomStart, position, t);
 
             // Subtle floating
-            pos.x += sin(uTime * 0.2 + position.y * 4.0) * 0.003;
-            pos.y += cos(uTime * 0.15 + position.x * 4.0) * 0.003;
-            pos.z += sin(uTime * 0.1 + position.x * position.y * 3.0) * 0.002;
+            pos.x += sin(uTime * 0.2 + position.y * 4.0) * 0.004;
+            pos.y += cos(uTime * 0.15 + position.x * 4.0) * 0.004;
+            pos.z += sin(uTime * 0.1 + position.x * position.y * 3.0) * 0.003;
+
+            // Cursor distance
+            float mouseDist = distance(position.xy, uMouse.xy);
+            vGlow = smoothstep(2.0, 0.0, mouseDist);
+
+            // Cursor repulsion — particles react to cursor
+            vec2 repDir = position.xy - uMouse.xy;
+            float repLen = length(repDir);
+            if (repLen > 0.01 && repLen < 1.2) {
+              pos.xy += normalize(repDir) * smoothstep(1.2, 0.0, repLen) * 0.08;
+              pos.z += smoothstep(1.2, 0.0, repLen) * 0.15;
+            }
 
             vec4 mvPos = modelViewMatrix * vec4(pos, 1.0);
             gl_Position = projectionMatrix * mvPos;
 
-            // Cursor glow
-            float mouseDist = distance(pos.xy, uMouse.xy);
-            vGlow = smoothstep(1.5, 0.0, mouseDist);
-
             // Scroll glow
             float scrollGlow = smoothstep(0.2, 0.6, uScroll) * 0.5;
 
-            float sz = aSize * (1.0 + vGlow * 1.5) * uPixelRatio;
+            // Size: bigger on glow
+            float sz = aSize * (1.0 + vGlow * 2.5) * uPixelRatio;
             gl_PointSize = sz * (1.0 / -mvPos.z);
 
-            // Use actual image color
             vColor = aColor;
 
-            // Brightness from color luminance
+            // Alpha: BRIGHT base + cursor boost
             float lum = dot(aColor, vec3(0.299, 0.587, 0.114));
-            vAlpha = (lum * 1.5 + vGlow * 0.4 + scrollGlow) * t;
+            vAlpha = (lum * 2.0 + vGlow * 0.8 + scrollGlow) * t;
             vAlpha *= 1.0 - smoothstep(0.75, 1.0, uScroll);
             vAlpha = clamp(vAlpha, 0.0, 1.0);
           }
@@ -195,11 +206,11 @@ export function ParticleHero() {
             float strength = 1.0 - smoothstep(0.0, 0.5, d);
             strength = pow(strength, 1.3);
 
-            // Use actual image color boosted brighter
-            vec3 color = vColor * 1.4;
+            // Image color boosted significantly
+            vec3 color = vColor * 2.0;
 
-            // Cursor makes particles whiter
-            color = mix(color, vec3(1.0, 0.95, 1.0), vGlow * 0.4);
+            // Cursor makes particles glow bright white
+            color = mix(color, vec3(1.0, 0.95, 1.0), vGlow * 0.6);
 
             // Scroll white
             float scrollWhite = smoothstep(0.4, 0.7, uScroll);
@@ -233,8 +244,8 @@ export function ParticleHero() {
       }
 
       if (points) {
-        points.rotation.y += (mouseRef.current.x * 0.1 - points.rotation.y) * 0.04
-        points.rotation.x += (-mouseRef.current.y * 0.06 - points.rotation.x) * 0.04
+        points.rotation.y += (mouseRef.current.x * 0.25 - points.rotation.y) * 0.05
+        points.rotation.x += (-mouseRef.current.y * 0.15 - points.rotation.x) * 0.05
       }
 
       renderer.render(scene, camera)
