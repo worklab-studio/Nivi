@@ -4,7 +4,6 @@ import { useRef, useEffect } from 'react'
 import Link from 'next/link'
 import { motion, useScroll, useTransform } from 'framer-motion'
 import * as THREE from 'three'
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 
 export function ParticleHero() {
   const sectionRef = useRef<HTMLElement>(null)
@@ -29,7 +28,6 @@ export function ParticleHero() {
     const w = container.clientWidth
     const h = container.clientHeight
 
-    // Renderer
     const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: false })
     renderer.setSize(w, h)
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
@@ -64,204 +62,169 @@ export function ParticleHero() {
     container.addEventListener('mouseleave', onMouseLeave)
     window.addEventListener('touchmove', onTouchMove, { passive: true })
 
-    // Load 3D model (quantized, no Draco)
-    const loader = new GLTFLoader()
-    loader.load('/nivi-model.bin', (gltf) => {
-      console.log('[ParticleHero] GLB loaded, traversing scene...')
-      // Extract all vertices from the model
-      const positions: number[] = []
-      const randomStarts: number[] = []
-      const alphas: number[] = []
-      const sizes: number[] = []
+    // Load raw position binary
+    fetch('/nivi-points.bin')
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        return res.arrayBuffer()
+      })
+      .then((buffer) => {
+        const float32 = new Float32Array(buffer)
+        const vertexCount = float32.length / 3
 
-      // First pass: compute bounding box
-      let meshGeo: THREE.BufferGeometry | null = null
-      gltf.scene.traverse((child) => {
-        if (child instanceof THREE.Mesh && child.geometry && !meshGeo) {
-          meshGeo = child.geometry
+        console.log(`[ParticleHero] Loaded ${vertexCount} vertices`)
+
+        const isMobile = window.innerWidth < 768
+        const maxParticles = isMobile ? 40000 : 200000
+        const skip = Math.max(1, Math.floor(vertexCount / maxParticles))
+
+        const positions: number[] = []
+        const randomStarts: number[] = []
+        const alphas: number[] = []
+        const sizes: number[] = []
+
+        // Find bounds
+        let minX = Infinity, minY = Infinity, minZ = Infinity
+        let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity
+        for (let i = 0; i < float32.length; i += 3) {
+          minX = Math.min(minX, float32[i])
+          minY = Math.min(minY, float32[i + 1])
+          minZ = Math.min(minZ, float32[i + 2])
+          maxX = Math.max(maxX, float32[i])
+          maxY = Math.max(maxY, float32[i + 1])
+          maxZ = Math.max(maxZ, float32[i + 2])
         }
+        const sizeX = maxX - minX
+        const sizeY = maxY - minY
+        const sizeZ = maxZ - minZ
+        const maxDim = Math.max(sizeX, sizeY, sizeZ)
+        const scale = 3.8 / maxDim
+        const cx = (minX + maxX) / 2
+        const cy = (minY + maxY) / 2
+        const cz = (minZ + maxZ) / 2
+
+        for (let i = 0; i < vertexCount; i += skip) {
+          const x = (float32[i * 3] - cx) * scale
+          const y = (float32[i * 3 + 1] - cy) * scale
+          const z = (float32[i * 3 + 2] - cz) * scale
+
+          // Brightness from position
+          const ny = (float32[i * 3 + 1] - minY) / sizeY
+          const nz = (float32[i * 3 + 2] - minZ) / sizeZ
+          const brightness = 0.6 + ny * 0.25 + nz * 0.15
+
+          positions.push(x, y, z)
+          alphas.push(brightness)
+          sizes.push(1.2 + brightness * 1.8)
+
+          // Random start
+          const theta = Math.random() * Math.PI * 2
+          const phi = Math.acos(2 * Math.random() - 1)
+          const r = 6 + Math.random() * 5
+          randomStarts.push(
+            r * Math.sin(phi) * Math.cos(theta),
+            r * Math.sin(phi) * Math.sin(theta),
+            r * Math.cos(phi)
+          )
+        }
+
+        console.log(`[ParticleHero] Using ${positions.length / 3} particles`)
+
+        const geo = new THREE.BufferGeometry()
+        geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+        geo.setAttribute('aRandomStart', new THREE.Float32BufferAttribute(randomStarts, 3))
+        geo.setAttribute('aAlpha', new THREE.Float32BufferAttribute(alphas, 1))
+        geo.setAttribute('aSize', new THREE.Float32BufferAttribute(sizes, 1))
+
+        mat = new THREE.ShaderMaterial({
+          transparent: true,
+          depthWrite: false,
+          blending: THREE.AdditiveBlending,
+          uniforms: {
+            uTime: { value: 0 },
+            uFormProgress: { value: 0 },
+            uScroll: { value: 0 },
+            uMouse: { value: new THREE.Vector3(0, 0, 0) },
+            uPixelRatio: { value: Math.min(window.devicePixelRatio, 2) },
+          },
+          vertexShader: /* glsl */ `
+            attribute float aAlpha;
+            attribute float aSize;
+            attribute vec3 aRandomStart;
+
+            uniform float uTime;
+            uniform float uFormProgress;
+            uniform float uScroll;
+            uniform vec3 uMouse;
+            uniform float uPixelRatio;
+
+            varying float vAlpha;
+            varying float vGlow;
+            varying float vDepth;
+
+            void main() {
+              float t = 1.0 - pow(1.0 - clamp(uFormProgress, 0.0, 1.0), 3.0);
+              vec3 pos = mix(aRandomStart, position, t);
+
+              // Subtle drift
+              float drift = uTime * 0.15;
+              pos.x += sin(drift + position.y * 3.0 + position.z * 2.0) * 0.005;
+              pos.y += cos(drift * 0.8 + position.x * 3.0 + position.z) * 0.005;
+
+              vec4 mvPos = modelViewMatrix * vec4(pos, 1.0);
+              gl_Position = projectionMatrix * mvPos;
+
+              float mouseDist = distance(pos.xy, uMouse.xy);
+              vGlow = smoothstep(2.0, 0.0, mouseDist);
+
+              float centerDist = length(position.xy);
+              float innerGlow = smoothstep(2.0, 0.0, centerDist) * 0.25;
+              float scrollGlow = smoothstep(0.2, 0.6, uScroll) * 0.8;
+
+              float sz = aSize * (1.0 + vGlow * 2.0 + innerGlow) * uPixelRatio;
+              gl_PointSize = sz * (1.0 / -mvPos.z);
+
+              vAlpha = (aAlpha * 1.4 + innerGlow * 0.5 + vGlow * 0.5 + scrollGlow) * t;
+              vAlpha *= 1.0 - smoothstep(0.75, 1.0, uScroll);
+              vAlpha = clamp(vAlpha, 0.0, 1.0);
+
+              vDepth = position.z;
+            }
+          `,
+          fragmentShader: /* glsl */ `
+            uniform float uScroll;
+            varying float vAlpha;
+            varying float vGlow;
+            varying float vDepth;
+
+            void main() {
+              float d = length(gl_PointCoord - vec2(0.5));
+              if (d > 0.5) discard;
+
+              float strength = 1.0 - smoothstep(0.0, 0.5, d);
+              strength = pow(strength, 1.2);
+
+              vec3 shadow = vec3(0.35, 0.2, 0.6);
+              vec3 mid = vec3(0.55, 0.4, 0.85);
+              vec3 highlight = vec3(0.75, 0.65, 1.0);
+
+              vec3 color = mix(shadow, mid, smoothstep(0.2, 0.5, vAlpha));
+              color = mix(color, highlight, smoothstep(0.5, 0.9, vAlpha));
+              color = mix(color, vec3(0.85, 0.78, 1.0), vGlow * 0.6);
+
+              float scrollWhite = smoothstep(0.3, 0.65, uScroll);
+              color = mix(color, vec3(1.0, 0.98, 1.0), scrollWhite);
+              color += vDepth * vec3(0.05, 0.03, 0.1);
+
+              gl_FragColor = vec4(color, vAlpha * strength);
+            }
+          `,
+        })
+
+        points = new THREE.Points(geo, mat)
+        scene.add(points)
       })
-      if (!meshGeo) { console.error('[ParticleHero] No mesh found'); return }
-
-      const posAttr = (meshGeo as THREE.BufferGeometry).attributes.position
-      if (!posAttr) { console.error('[ParticleHero] No position attribute'); return }
-
-      // Compute bounds
-      ;(meshGeo as THREE.BufferGeometry).computeBoundingBox()
-      const meshBox = (meshGeo as THREE.BufferGeometry).boundingBox!
-      const meshSize = meshBox.getSize(new THREE.Vector3())
-
-      const isMobile = window.innerWidth < 768
-      const totalVerts = posAttr.count
-      const maxParticles = isMobile ? 40000 : 150000  // use almost all vertices for face detail
-      const skip = Math.max(1, Math.floor(totalVerts / maxParticles))
-
-      console.log(`[ParticleHero] Sampling ${Math.floor(totalVerts / skip)} of ${totalVerts} vertices`)
-
-      for (let i = 0; i < totalVerts; i += skip) {
-        const x = posAttr.getX(i)
-        const y = posAttr.getY(i)
-        const z = posAttr.getZ(i)
-
-        // Brightness: front-facing (high Z) and upper areas (high Y) are brighter
-        const normalizedY = (y - meshBox.min.y) / meshSize.y
-        const normalizedZ = (z - meshBox.min.z) / meshSize.z
-        const brightness = 0.6 + normalizedY * 0.25 + normalizedZ * 0.15
-
-        positions.push(x, y, z)
-        alphas.push(brightness)
-        sizes.push(1.5 + brightness * 2.0)  // smaller for density at 150K particles
-
-        // Random start position (sphere for entrance animation)
-        const theta = Math.random() * Math.PI * 2
-        const phi = Math.acos(2 * Math.random() - 1)
-        const r = 8 + Math.random() * 6
-        randomStarts.push(
-          r * Math.sin(phi) * Math.cos(theta),
-          r * Math.sin(phi) * Math.sin(theta),
-          r * Math.cos(phi)
-        )
-      }
-
-      if (positions.length === 0) {
-        console.error('No vertices found in model')
-        return
-      }
-
-      console.log(`[ParticleHero] Loaded ${positions.length / 3} particles from 3D model`)
-
-      // Center and scale the model
-      const tempGeo = new THREE.BufferGeometry()
-      tempGeo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
-      tempGeo.computeBoundingBox()
-      const box = tempGeo.boundingBox!
-      const center = box.getCenter(new THREE.Vector3())
-      const size = box.getSize(new THREE.Vector3())
-      const maxDim = Math.max(size.x, size.y, size.z)
-      const scale = 3.5 / maxDim // fit within ~3.5 units
-
-      // Apply centering and scaling
-      for (let i = 0; i < positions.length; i += 3) {
-        positions[i] = (positions[i] - center.x) * scale
-        positions[i + 1] = (positions[i + 1] - center.y) * scale
-        positions[i + 2] = (positions[i + 2] - center.z) * scale
-      }
-
-      const geo = new THREE.BufferGeometry()
-      geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
-      geo.setAttribute('aRandomStart', new THREE.Float32BufferAttribute(randomStarts, 3))
-      geo.setAttribute('aAlpha', new THREE.Float32BufferAttribute(alphas, 1))
-      geo.setAttribute('aSize', new THREE.Float32BufferAttribute(sizes, 1))
-
-      mat = new THREE.ShaderMaterial({
-        transparent: true,
-        depthWrite: false,
-        blending: THREE.AdditiveBlending,
-        uniforms: {
-          uTime: { value: 0 },
-          uFormProgress: { value: 0 },
-          uScroll: { value: 0 },
-          uMouse: { value: new THREE.Vector3(0, 0, 0) },
-          uPixelRatio: { value: Math.min(window.devicePixelRatio, 2) },
-        },
-        vertexShader: /* glsl */ `
-          attribute float aAlpha;
-          attribute float aSize;
-          attribute vec3 aRandomStart;
-
-          uniform float uTime;
-          uniform float uFormProgress;
-          uniform float uScroll;
-          uniform vec3 uMouse;
-          uniform float uPixelRatio;
-
-          varying float vAlpha;
-          varying float vGlow;
-          varying float vDepth;
-
-          void main() {
-            // Entrance: spiral in from random positions
-            float t = 1.0 - pow(1.0 - clamp(uFormProgress, 0.0, 1.0), 3.0);
-            vec3 pos = mix(aRandomStart, position, t);
-
-            // Subtle drift
-            float drift = uTime * 0.15;
-            pos.x += sin(drift + position.y * 3.0 + position.z * 2.0) * 0.005;
-            pos.y += cos(drift * 0.8 + position.x * 3.0 + position.z) * 0.005;
-            pos.z += sin(drift * 0.6 + position.x * position.y * 2.0) * 0.003;
-
-            vec4 mvPos = modelViewMatrix * vec4(pos, 1.0);
-            gl_Position = projectionMatrix * mvPos;
-
-            // Mouse glow
-            float mouseDist = distance(pos.xy, uMouse.xy);
-            vGlow = smoothstep(2.0, 0.0, mouseDist);
-
-            // Inner glow from center
-            float centerDist = length(position.xy);
-            float innerGlow = smoothstep(2.0, 0.0, centerDist) * 0.25;
-
-            // Scroll glow (brighter as camera zooms in)
-            float scrollGlow = smoothstep(0.2, 0.6, uScroll) * 0.8;
-
-            // Point size
-            float sz = aSize * (1.0 + vGlow * 2.0 + innerGlow) * uPixelRatio;
-            gl_PointSize = sz * (1.0 / -mvPos.z);
-
-            // Alpha: always bright
-            vAlpha = (aAlpha * 1.4 + innerGlow * 0.5 + vGlow * 0.5 + scrollGlow) * t;
-            vAlpha *= 1.0 - smoothstep(0.75, 1.0, uScroll);
-            vAlpha = clamp(vAlpha, 0.0, 1.0);
-
-            vDepth = position.z;
-          }
-        `,
-        fragmentShader: /* glsl */ `
-          uniform float uScroll;
-          varying float vAlpha;
-          varying float vGlow;
-          varying float vDepth;
-
-          void main() {
-            float d = length(gl_PointCoord - vec2(0.5));
-            if (d > 0.5) discard;
-
-            float strength = 1.0 - smoothstep(0.0, 0.5, d);
-            strength = pow(strength, 1.2);
-
-            // Color: deep purple palette (matching epiminds reference)
-            vec3 shadow = vec3(0.35, 0.2, 0.6);       // deep purple shadows
-            vec3 mid = vec3(0.55, 0.4, 0.85);          // rich purple mids
-            vec3 highlight = vec3(0.75, 0.65, 1.0);    // bright lavender highlights
-
-            vec3 color = mix(shadow, mid, smoothstep(0.2, 0.5, vAlpha));
-            color = mix(color, highlight, smoothstep(0.5, 0.9, vAlpha));
-
-            // Cursor glow pushes toward bright white-purple
-            color = mix(color, vec3(0.85, 0.78, 1.0), vGlow * 0.6);
-
-            // Scroll: turn white
-            float scrollWhite = smoothstep(0.3, 0.65, uScroll);
-            color = mix(color, vec3(1.0, 0.98, 1.0), scrollWhite);
-
-            // Depth tint — forward particles slightly brighter purple
-            color += vDepth * vec3(0.05, 0.03, 0.1);
-
-            gl_FragColor = vec4(color, vAlpha * strength);
-          }
-        `,
-      })
-
-      points = new THREE.Points(geo, mat)
-      scene.add(points)
-      console.log('[ParticleHero] Points added to scene')
-    },
-    (progress) => {
-      console.log('[ParticleHero] Loading:', Math.round((progress.loaded / (progress.total || 1)) * 100) + '%')
-    },
-    (error) => {
-      console.error('[ParticleHero] GLB load error:', error)
-    })
+      .catch((err) => console.error('[ParticleHero] Load error:', err))
 
     // Render loop
     function animate() {
@@ -273,11 +236,8 @@ export function ParticleHero() {
         mat.uniforms.uFormProgress.value = Math.min(1, elapsed / 2.5)
         mat.uniforms.uScroll.value = scroll
 
-        // Camera zooms into face on scroll
-        const targetZ = initialCamZ - scroll * 6.0
-        camera.position.z = Math.max(-0.5, targetZ)
+        camera.position.z = Math.max(-0.5, initialCamZ - scroll * 6.0)
 
-        // Mouse → world space
         const mouse3D = new THREE.Vector3(mouseRef.current.x, mouseRef.current.y, 0.5)
         mouse3D.unproject(camera)
         const dir = mouse3D.sub(camera.position).normalize()
@@ -286,7 +246,6 @@ export function ParticleHero() {
         mat.uniforms.uMouse.value.set(worldMouse.x, worldMouse.y, 0)
       }
 
-      // Head rotation following cursor
       if (points) {
         const targetRotY = mouseRef.current.x * 0.2
         const targetRotX = -mouseRef.current.y * 0.12
@@ -299,7 +258,6 @@ export function ParticleHero() {
     }
     animate()
 
-    // Resize
     const onResize = () => {
       const w = container.clientWidth
       const h = container.clientHeight
@@ -326,12 +284,10 @@ export function ParticleHero() {
       style={{ height: '250vh', backgroundColor: bgColor }}
     >
       <div className="sticky top-0 h-screen overflow-hidden">
-        {/* Three.js canvas */}
         <div ref={containerRef} className="absolute inset-0" />
 
         {/* Purple backlight glow */}
         <div className="absolute inset-0 pointer-events-none">
-          {/* Large outer purple atmosphere */}
           <div
             className="absolute top-[38%] left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full blur-3xl"
             style={{
@@ -340,7 +296,6 @@ export function ParticleHero() {
               background: 'radial-gradient(ellipse, rgba(120,80,220,0.15) 0%, rgba(80,40,180,0.05) 40%, transparent 70%)',
             }}
           />
-          {/* Inner bright purple behind head */}
           <div
             className="absolute top-[35%] left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full blur-2xl"
             style={{
@@ -349,7 +304,6 @@ export function ParticleHero() {
               background: 'radial-gradient(ellipse, rgba(140,100,255,0.2) 0%, rgba(100,60,200,0.08) 50%, transparent 75%)',
             }}
           />
-          {/* Hot core glow */}
           <div
             className="absolute top-[33%] left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full blur-xl"
             style={{
@@ -360,7 +314,7 @@ export function ParticleHero() {
           />
         </div>
 
-        {/* Text — bottom left */}
+        {/* Text */}
         <motion.div
           className="absolute z-10 left-0 right-0 px-6 sm:px-10 lg:px-16"
           style={{ bottom: 48, opacity: textOpacity }}
@@ -382,7 +336,6 @@ export function ParticleHero() {
           </Link>
         </motion.div>
 
-        {/* Bottom fade */}
         <div
           className="absolute bottom-0 left-0 right-0 h-32 pointer-events-none"
           style={{ background: 'linear-gradient(to top, rgba(10,10,10,0.8), transparent)' }}
