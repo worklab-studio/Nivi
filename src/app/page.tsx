@@ -11,7 +11,7 @@ export default async function LandingPage() {
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white overflow-hidden">
       {/* ──── NAV ──── */}
-      <nav className="flex items-center justify-between px-8 py-5 max-w-7xl mx-auto">
+      <nav className="relative z-20 flex items-center justify-between px-8 py-5 max-w-7xl mx-auto">
         <span className="flex items-center gap-2">
           <img src="/logo.svg" alt="" className="w-6 h-6" />
           <span className="font-sans text-xl font-semibold tracking-tight">hello nivi</span>

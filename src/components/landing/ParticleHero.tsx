@@ -375,30 +375,25 @@ export function ParticleHero() {
           />
         </div>
 
-        {/* Text — bottom left */}
+        {/* Text — bottom left, aligned with nav padding */}
         <motion.div
-          className="absolute z-10 bottom-0 left-0 p-8 sm:p-12 lg:p-16"
+          className="absolute z-10 bottom-12 sm:bottom-16 left-0 right-0 px-8 max-w-7xl mx-auto"
           style={{ opacity: textOpacity }}
         >
           <p className="text-[10px] sm:text-[11px] text-[#666] uppercase tracking-[0.3em] font-medium mb-3">
-            Introducing
+            Your LinkedIn personal branding strategist
           </p>
-          <h1 className="font-sans mb-2">
-            <span className="text-[48px] sm:text-[64px] lg:text-[72px] font-bold tracking-tight text-white leading-none">
-              Introducing{' '}
-            </span>
-            <span className="text-[48px] sm:text-[64px] lg:text-[72px] italic font-light bg-gradient-to-r from-[#c4b5fd] to-[#a78bfa] bg-clip-text text-transparent leading-none">
-              Nivi.
-            </span>
+          <h1 className="font-sans text-[40px] sm:text-[56px] lg:text-[64px] font-bold tracking-tight text-white leading-[1.05] mb-3">
+            Introducing Nivi.
           </h1>
-          <p className="text-[14px] sm:text-[16px] text-[#888] mb-6 max-w-md">
-            Your LinkedIn personal branding strategist.
+          <p className="text-[14px] sm:text-[16px] text-[#777] mb-6 max-w-md leading-relaxed">
+            She learns your voice, writes daily posts, and delivers them to your WhatsApp.
           </p>
           <Link
             href="/sign-up"
             className="inline-flex items-center gap-2 bg-white text-black text-[13px] px-6 py-2.5 rounded-lg font-medium hover:bg-white/90 transition-all hover:shadow-[0_0_24px_rgba(255,255,255,0.1)]"
           >
-            Request Access <span className="text-[11px]">↗</span>
+            Say Hello Nivi <span className="text-[11px]">↗</span>
           </Link>
         </motion.div>
 
