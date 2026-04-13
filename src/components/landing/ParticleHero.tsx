@@ -73,7 +73,7 @@ export function ParticleHero() {
       const data = ctx.getImageData(0, 0, c.width, c.height)
 
       const isMobile = window.innerWidth < 768
-      const step = isMobile ? 3 : 1  // step=1 for maximum density on desktop
+      const step = isMobile ? 3 : 2  // dense but performant
 
       const positions: number[] = []
       const randomStarts: number[] = []
@@ -121,7 +121,7 @@ export function ParticleHero() {
 
           positions.push(px, py, pz)
           alphas.push(brightness)
-          sizes.push(1.2 + brightness * 1.5)  // small dense particles
+          sizes.push(2.0 + brightness * 2.5)
 
           // Random start: spiral sphere
           const theta = Math.random() * Math.PI * 2
@@ -197,8 +197,8 @@ export function ParticleHero() {
             float sz = aSize * (1.0 + vGlow * 1.8 + innerGlow * 0.5) * uPixelRatio;
             gl_PointSize = sz * (1.0 / -mvPos.z);
 
-            // Alpha: always visible with inner glow + cursor boost
-            vAlpha = (aAlpha * 0.6 + innerGlow + vGlow * 0.4) * t;
+            // Alpha: BRIGHT base — face must be clearly visible
+            vAlpha = (aAlpha * 0.9 + innerGlow * 0.5 + vGlow * 0.3) * t;
             vAlpha *= 1.0 - smoothstep(0.55, 1.0, uScroll);
             vAlpha = clamp(vAlpha, 0.0, 1.0);
 
@@ -214,20 +214,21 @@ export function ParticleHero() {
             float d = length(gl_PointCoord - vec2(0.5));
             if (d > 0.5) discard;
 
+            // Softer falloff for glow effect
             float strength = 1.0 - smoothstep(0.0, 0.5, d);
-            strength = pow(strength, 1.5);
+            strength = pow(strength, 1.2);
 
-            // Color: blue-purple base → bright cool white on glow
-            vec3 base = vec3(0.45, 0.42, 0.7);       // blue-purple
-            vec3 innerColor = vec3(0.6, 0.55, 0.85);  // lighter purple for inner glow
-            vec3 bright = vec3(0.9, 0.88, 1.0);       // cool white
+            // Color: bright lavender-blue base → pure white on glow
+            vec3 base = vec3(0.65, 0.6, 0.9);         // bright lavender
+            vec3 innerColor = vec3(0.8, 0.75, 1.0);   // bright purple-white
+            vec3 bright = vec3(1.0, 0.98, 1.0);       // pure white
 
             // Mix based on depth + glow
             vec3 color = mix(base, innerColor, smoothstep(-0.3, 0.5, vDepth));
-            color = mix(color, bright, vGlow);
+            color = mix(color, bright, vGlow * 0.8);
 
             // Depth luminance: forward particles brighter
-            color += vDepth * vec3(0.08, 0.06, 0.12);
+            color += vDepth * vec3(0.1, 0.08, 0.15);
 
             gl_FragColor = vec4(color, vAlpha * strength);
           }
@@ -305,9 +306,9 @@ export function ParticleHero() {
           <div
             className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full"
             style={{
-              width: '60%',
-              height: '70%',
-              background: 'radial-gradient(ellipse, rgba(80,60,180,0.12) 0%, rgba(60,40,140,0.04) 40%, transparent 70%)',
+              width: '70%',
+              height: '80%',
+              background: 'radial-gradient(ellipse, rgba(100,80,200,0.2) 0%, rgba(70,50,160,0.08) 35%, transparent 65%)',
             }}
           />
         </div>
