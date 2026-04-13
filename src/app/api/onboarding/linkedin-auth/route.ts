@@ -16,6 +16,8 @@ export async function POST() {
       body: JSON.stringify({
         type: 'create',
         providers: ['LINKEDIN'],
+        api_url: process.env.UNIPILE_BASE_URL,
+        expiresOn: new Date(Date.now() + 3600000).toISOString().replace(/\.\d{3}Z$/, '.000Z'),
         success_redirect_url: `${process.env.NEXT_PUBLIC_APP_URL}/api/onboarding/linkedin-callback?userId=${userId}&status=connected`,
         failure_redirect_url: `${process.env.NEXT_PUBLIC_APP_URL}/api/onboarding/linkedin-callback?userId=${userId}&status=failed`,
         name: userId,
