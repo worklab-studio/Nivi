@@ -79,7 +79,7 @@ export function ParticleHero() {
       const step = isMobile ? 2 : 1
       const imgW = c.width
       const imgH = c.height
-      const spread = 3.8
+      const spread = 3.2
       const spreadY = spread * aspect
 
       const positions: number[] = []
