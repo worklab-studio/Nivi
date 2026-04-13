@@ -172,9 +172,23 @@ export function ParticleHero() {
             float t = 1.0 - pow(1.0 - clamp(uFormProgress, 0.0, 1.0), 3.0);
             vec3 pos = mix(aRandomStart, position, t);
 
-            // Wobble / breathing
-            pos.x += sin(uTime * 0.5 + position.y * 3.0) * 0.012;
-            pos.y += cos(uTime * 0.4 + position.x * 3.0) * 0.012;
+            // Mouse distance (before displacement)
+            float mouseDist = distance(position.xy, uMouse.xy);
+            vGlow = smoothstep(1.8, 0.0, mouseDist);
+
+            // Cursor repulsion: particles spread apart near cursor
+            vec2 repulseDir = position.xy - uMouse.xy;
+            float repulseLen = length(repulseDir);
+            if (repulseLen > 0.01 && repulseLen < 1.5) {
+              vec2 repulseNorm = repulseDir / repulseLen;
+              float repulseStrength = smoothstep(1.5, 0.0, repulseLen) * 0.15;
+              pos.xy += repulseNorm * repulseStrength;
+            }
+
+            // Wobble / breathing (stronger near cursor)
+            float wobbleAmt = 0.012 + vGlow * 0.025;
+            pos.x += sin(uTime * 0.5 + position.y * 3.0) * wobbleAmt;
+            pos.y += cos(uTime * 0.4 + position.x * 3.0) * wobbleAmt;
             pos.z += sin(uTime * 0.3 + position.x * position.y * 2.0) * 0.008;
 
             // Scroll zoom
@@ -184,19 +198,15 @@ export function ParticleHero() {
             vec4 mvPos = modelViewMatrix * vec4(pos, 1.0);
             gl_Position = projectionMatrix * mvPos;
 
-            // Mouse glow in world space
-            float dist = distance(pos.xy, uMouse.xy);
-            vGlow = smoothstep(1.8, 0.0, dist);
-
             // Ambient pulse
             float pulse = 0.5 + 0.5 * sin(uTime * 1.2 + position.x * 2.0 + position.y * 1.5);
 
-            // Point size
-            float sz = aSize * (1.0 + vGlow * 3.0 + pulse * 0.2) * uPixelRatio;
+            // Point size: always visible, bigger on glow
+            float sz = aSize * (1.0 + vGlow * 2.5 + pulse * 0.15) * uPixelRatio;
             gl_PointSize = sz * (1.0 / -mvPos.z);
 
-            // Alpha
-            vAlpha = (aAlpha * 0.18 + vGlow * 0.9 + pulse * 0.06) * t;
+            // Alpha: HIGH base (face always visible) + extra on cursor
+            vAlpha = (aAlpha * 0.55 + vGlow * 0.45 + pulse * 0.04) * t;
             vAlpha *= 1.0 - smoothstep(0.55, 1.0, uScroll);
 
             vDepth = position.z;
