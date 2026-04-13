@@ -15,8 +15,12 @@ export function ParticleHero() {
     target: sectionRef,
     offset: ['start start', 'end start'],
   })
-  const textOpacity = useTransform(scrollYProgress, [0, 0.25], [1, 0])
-  const textY = useTransform(scrollYProgress, [0, 0.3], [0, -80])
+  const textOpacity = useTransform(scrollYProgress, [0, 0.3], [1, 0])
+  const bgColor = useTransform(
+    scrollYProgress,
+    [0, 0.5, 0.8, 1],
+    ['rgba(10,10,10,1)', 'rgba(10,10,10,1)', 'rgba(255,255,255,0.9)', 'rgba(255,255,255,1)']
+  )
 
   useEffect(() => {
     const container = containerRef.current
@@ -34,7 +38,7 @@ export function ParticleHero() {
 
     const scene = new THREE.Scene()
     const camera = new THREE.PerspectiveCamera(50, w / h, 0.1, 100)
-    camera.position.z = 3.5  // closer camera — face fills viewport
+    camera.position.z = 5  // pull back so face is properly framed
 
     let points: THREE.Points | null = null
     let mat: THREE.ShaderMaterial | null = null
@@ -246,15 +250,17 @@ export function ParticleHero() {
             float sz = aSize * (1.0 + vGlow * 1.8 + innerGlow * 0.5) * uPixelRatio;
             gl_PointSize = sz * (1.0 / -mvPos.z);
 
-            // Alpha: VERY BRIGHT — face must glow
-            vAlpha = (aAlpha * 1.2 + innerGlow * 0.6 + vGlow * 0.4) * t;
-            vAlpha *= 1.0 - smoothstep(0.55, 1.0, uScroll);
+            // Alpha: bright base, glow hotter on scroll, then fade
+            float scrollGlow = smoothstep(0.0, 0.5, uScroll) * 0.5; // brighter as you scroll
+            vAlpha = (aAlpha * 1.2 + innerGlow * 0.6 + vGlow * 0.4 + scrollGlow) * t;
+            vAlpha *= 1.0 - smoothstep(0.65, 1.0, uScroll); // fade out at end
             vAlpha = clamp(vAlpha, 0.0, 1.0);
 
             vDepth = position.z;
           }
         `,
         fragmentShader: /* glsl */ `
+          uniform float uScroll;
           varying float vAlpha;
           varying float vGlow;
           varying float vDepth;
@@ -278,6 +284,10 @@ export function ParticleHero() {
 
             // Cursor makes even brighter
             color = mix(color, vec3(1.0), vGlow * 0.5);
+
+            // Scroll: particles turn white-hot before fading
+            float scrollWhite = smoothstep(0.3, 0.7, uScroll);
+            color = mix(color, vec3(1.0, 0.98, 1.0), scrollWhite);
 
             // Depth: forward = brighter
             color += vDepth * vec3(0.12, 0.1, 0.18);
@@ -346,8 +356,8 @@ export function ParticleHero() {
   return (
     <motion.section
       ref={sectionRef}
-      className="relative bg-[#0a0a0a]"
-      style={{ height: '180vh' }}
+      className="relative"
+      style={{ height: '200vh', backgroundColor: bgColor }}
     >
       <div className="sticky top-0 h-screen overflow-hidden">
         {/* Three.js canvas */}
@@ -368,7 +378,7 @@ export function ParticleHero() {
         {/* Text — bottom left */}
         <motion.div
           className="absolute z-10 bottom-0 left-0 p-8 sm:p-12 lg:p-16 max-w-2xl"
-          style={{ opacity: textOpacity, y: textY }}
+          style={{ opacity: textOpacity }}
         >
           <p className="text-[10px] sm:text-[11px] text-[#777] uppercase tracking-[0.25em] font-medium mb-4">
             Your LinkedIn personal branding strategist
@@ -390,10 +400,20 @@ export function ParticleHero() {
           </div>
         </motion.div>
 
-        {/* Bottom fade */}
-        <div
-          className="absolute bottom-0 left-0 right-0 h-32 pointer-events-none"
-          style={{ background: 'linear-gradient(to top, #0a0a0a, transparent)' }}
+        {/* Bottom fade — adapts to scroll bg transition */}
+        <motion.div
+          className="absolute bottom-0 left-0 right-0 h-40 pointer-events-none"
+          style={{
+            background: useTransform(
+              scrollYProgress,
+              [0, 0.7, 1],
+              [
+                'linear-gradient(to top, rgba(10,10,10,1), transparent)',
+                'linear-gradient(to top, rgba(10,10,10,0.5), transparent)',
+                'linear-gradient(to top, rgba(255,255,255,1), transparent)',
+              ]
+            ),
+          }}
         />
       </div>
     </motion.section>
