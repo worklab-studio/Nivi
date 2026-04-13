@@ -189,49 +189,113 @@ export default async function LandingPage() {
         </div>
       </section>
 
-      {/* ──── DASHBOARD + WHATSAPP SPLIT ──── */}
+      {/* ──── TWO WAYS TO WORK ──── */}
       <section className="border-t border-[#1a1a1a]">
         <div className="max-w-6xl mx-auto px-8 py-24">
-          <p className="font-sans text-xs text-[#555] uppercase tracking-[0.2em] text-center mb-3">Two interfaces, one brain</p>
-          <h2 className="text-[32px] sm:text-[40px] font-bold text-center mb-4">Dashboard when you want depth.<br className="hidden sm:block" /> WhatsApp when you want speed.</h2>
-          <p className="text-[#777] text-center text-[15px] mb-16 max-w-2xl mx-auto">Nivi shares the same memory, voice, and intelligence across both interfaces. Use the dashboard for deep work, WhatsApp for quick actions.</p>
+          <p className="font-sans text-xs text-[#555] uppercase tracking-[0.2em] text-center mb-3">Two ways to work</p>
+          <h2 className="text-[32px] sm:text-[40px] font-bold text-center mb-16">Same brain. Your choice of interface.</h2>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-[#111] border border-[#222] rounded-xl p-8">
-              <p className="text-[11px] text-[#555] uppercase tracking-widest mb-4 font-medium">Dashboard</p>
-              <ul className="space-y-3">
+          {/* Dashboard */}
+          <div className="grid grid-cols-1 md:grid-cols-[1fr_1.2fr] gap-10 items-center mb-20">
+            <div>
+              <div className="inline-flex items-center gap-2 bg-[#1a1a1a] border border-[#252525] rounded-full px-3 py-1 mb-4">
+                <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                <span className="text-[11px] text-[#888] font-medium">Dashboard</span>
+              </div>
+              <h3 className="text-[24px] font-bold text-white mb-3">Deep work mode</h3>
+              <p className="text-[15px] text-[#888] leading-relaxed mb-6">
+                When you want full control — compose with the AI editor, drag posts across your calendar, analyze what&apos;s working, and build your brand identity.
+              </p>
+              <div className="grid grid-cols-2 gap-3">
                 {[
-                  'Interactive post composer with AI toolbar',
-                  'Drag-and-drop content calendar',
-                  'Split-pane engagement with comment drafting',
-                  'Inspiration library with 100+ creators',
-                  'Brand identity & voice DNA setup',
-                  'Performance analytics & charts',
+                  'AI Post Composer',
+                  'Content Calendar',
+                  'Engagement Tools',
+                  'Inspiration Library',
+                  'Voice DNA Setup',
+                  'Analytics & Charts',
                 ].map((item) => (
-                  <li key={item} className="flex items-start gap-2.5 text-[13px] text-[#aaa]">
-                    <span className="text-[#22c55e] mt-0.5 shrink-0">✓</span>
+                  <div key={item} className="flex items-center gap-2 text-[13px] text-[#aaa]">
+                    <div className="w-1 h-1 rounded-full bg-blue-500 shrink-0" />
                     {item}
-                  </li>
+                  </div>
                 ))}
-              </ul>
+              </div>
             </div>
-            <div className="bg-[#111] border border-[#222] rounded-xl p-8">
-              <p className="text-[11px] text-[#555] uppercase tracking-widest mb-4 font-medium">WhatsApp</p>
-              <ul className="space-y-3">
+            <div className="bg-[#111] border border-[#222] rounded-2xl p-6 relative overflow-hidden">
+              <div className="absolute top-0 left-0 right-0 h-8 bg-[#1a1a1a] border-b border-[#252525] flex items-center px-3 gap-1.5">
+                <div className="w-2.5 h-2.5 rounded-full bg-[#333]" />
+                <div className="w-2.5 h-2.5 rounded-full bg-[#333]" />
+                <div className="w-2.5 h-2.5 rounded-full bg-[#333]" />
+              </div>
+              <div className="mt-10 space-y-3">
+                <div className="h-3 bg-[#1a1a1a] rounded w-2/3" />
+                <div className="h-3 bg-[#1a1a1a] rounded w-full" />
+                <div className="h-3 bg-[#1a1a1a] rounded w-4/5" />
+                <div className="h-3 bg-[#1a1a1a] rounded w-3/5" />
+                <div className="mt-4 grid grid-cols-3 gap-2">
+                  <div className="h-16 bg-[#1a1a1a] rounded-lg" />
+                  <div className="h-16 bg-[#1a1a1a] rounded-lg" />
+                  <div className="h-16 bg-[#1a1a1a] rounded-lg" />
+                </div>
+                <div className="h-24 bg-[#1a1a1a] rounded-lg mt-2" />
+              </div>
+            </div>
+          </div>
+
+          {/* WhatsApp */}
+          <div className="grid grid-cols-1 md:grid-cols-[1.2fr_1fr] gap-10 items-center">
+            <div className="bg-[#111] border border-[#222] rounded-2xl p-6 order-2 md:order-1 max-w-sm mx-auto w-full">
+              <div className="flex items-center gap-2.5 mb-4 pb-3 border-b border-[#1e1e1e]">
+                <div className="w-8 h-8 rounded-full bg-[#22c55e] flex items-center justify-center">
+                  <span className="text-black text-xs font-bold">N</span>
+                </div>
+                <div>
+                  <p className="text-[13px] font-medium text-white">Nivi</p>
+                  <p className="text-[9px] text-[#666]">Online</p>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <div className="bg-[#1a1a1a] rounded-xl rounded-tl-sm p-3 max-w-[85%]">
+                  <p className="text-[12px] text-[#ccc] leading-relaxed">Your post is ready. Hook score: 9/10</p>
+                </div>
+                <div className="bg-[#1a1a1a] rounded-xl rounded-tl-sm p-3 max-w-[85%]">
+                  <p className="text-[12px] text-[#ddd] italic leading-relaxed">&ldquo;I almost quit my startup 3 months in...&rdquo;</p>
+                </div>
+                <div className="flex justify-end">
+                  <div className="bg-[#005c4b] rounded-xl rounded-tr-sm px-3 py-1.5">
+                    <p className="text-[12px] text-white font-medium">POST</p>
+                  </div>
+                </div>
+                <div className="bg-[#1a1a1a] rounded-xl rounded-tl-sm p-3 max-w-[85%]">
+                  <p className="text-[12px] text-[#ccc]">Done! Live on LinkedIn 🚀</p>
+                </div>
+              </div>
+            </div>
+            <div className="order-1 md:order-2">
+              <div className="inline-flex items-center gap-2 bg-[#1a1a1a] border border-[#252525] rounded-full px-3 py-1 mb-4">
+                <div className="w-1.5 h-1.5 rounded-full bg-[#22c55e]" />
+                <span className="text-[11px] text-[#888] font-medium">WhatsApp</span>
+              </div>
+              <h3 className="text-[24px] font-bold text-white mb-3">Speed mode</h3>
+              <p className="text-[15px] text-[#888] leading-relaxed mb-6">
+                When you want zero friction — approve posts, give feedback, and manage your LinkedIn from the app you already use 50 times a day.
+              </p>
+              <div className="grid grid-cols-2 gap-3">
                 {[
-                  'Morning post brief — approve with one word',
-                  'Edit posts conversationally ("make it shorter")',
-                  'Schedule or skip with a message',
-                  'Engagement opportunities with draft comments',
-                  'Ask Nivi anything about your brand strategy',
-                  'Voice notes → Nivi turns them into posts',
+                  'One-word publishing',
+                  'Voice note → post',
+                  'Morning briefs',
+                  'Engagement alerts',
+                  'Edit conversationally',
+                  'Strategy advice',
                 ].map((item) => (
-                  <li key={item} className="flex items-start gap-2.5 text-[13px] text-[#aaa]">
-                    <span className="text-[#22c55e] mt-0.5 shrink-0">✓</span>
+                  <div key={item} className="flex items-center gap-2 text-[13px] text-[#aaa]">
+                    <div className="w-1 h-1 rounded-full bg-[#22c55e] shrink-0" />
                     {item}
-                  </li>
+                  </div>
                 ))}
-              </ul>
+              </div>
             </div>
           </div>
         </div>
