@@ -66,7 +66,7 @@ export function ParticleHero() {
 
     // Load 3D model (quantized, no Draco)
     const loader = new GLTFLoader()
-    loader.load('/nivi-model.glb', (gltf) => {
+    loader.load('/nivi-model.bin', (gltf) => {
       console.log('[ParticleHero] GLB loaded, traversing scene...')
       // Extract all vertices from the model
       const positions: number[] = []
