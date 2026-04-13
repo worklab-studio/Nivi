@@ -67,56 +67,65 @@ export function ParticleHero() {
 
     // Load 3D model (Draco compressed)
     const dracoLoader = new DRACOLoader()
-    dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.7/')
+    dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/')
     const loader = new GLTFLoader()
     loader.setDRACOLoader(dracoLoader)
     loader.load('/nivi-model.glb', (gltf) => {
+      console.log('[ParticleHero] GLB loaded, traversing scene...')
       // Extract all vertices from the model
       const positions: number[] = []
       const randomStarts: number[] = []
       const alphas: number[] = []
       const sizes: number[] = []
 
+      // First pass: compute bounding box
+      let meshGeo: THREE.BufferGeometry | null = null
       gltf.scene.traverse((child) => {
-        if (child instanceof THREE.Mesh && child.geometry) {
-          const geo = child.geometry
-          const posAttr = geo.attributes.position
-          if (!posAttr) return
-
-          const isMobile = window.innerWidth < 768
-          // Sample vertices — skip some for performance
-          const totalVerts = posAttr.count
-          const maxParticles = isMobile ? 30000 : 80000
-          const skip = Math.max(1, Math.floor(totalVerts / maxParticles))
-
-          for (let i = 0; i < totalVerts; i += skip) {
-            const x = posAttr.getX(i)
-            const y = posAttr.getY(i)
-            const z = posAttr.getZ(i)
-
-            // Get color/brightness from vertex normals for shading
-            let brightness = 0.7
-            if (geo.attributes.normal) {
-              const ny = geo.attributes.normal.getY(i)
-              brightness = 0.4 + Math.max(0, ny) * 0.6 // front-facing = brighter
-            }
-
-            positions.push(x, y, z)
-            alphas.push(brightness)
-            sizes.push(1.0 + brightness * 1.8)
-
-            // Random start position (sphere for entrance animation)
-            const theta = Math.random() * Math.PI * 2
-            const phi = Math.acos(2 * Math.random() - 1)
-            const r = 8 + Math.random() * 6
-            randomStarts.push(
-              r * Math.sin(phi) * Math.cos(theta),
-              r * Math.sin(phi) * Math.sin(theta),
-              r * Math.cos(phi)
-            )
-          }
+        if (child instanceof THREE.Mesh && child.geometry && !meshGeo) {
+          meshGeo = child.geometry
         }
       })
+      if (!meshGeo) { console.error('[ParticleHero] No mesh found'); return }
+
+      const posAttr = (meshGeo as THREE.BufferGeometry).attributes.position
+      if (!posAttr) { console.error('[ParticleHero] No position attribute'); return }
+
+      // Compute bounds
+      ;(meshGeo as THREE.BufferGeometry).computeBoundingBox()
+      const meshBox = (meshGeo as THREE.BufferGeometry).boundingBox!
+      const meshSize = meshBox.getSize(new THREE.Vector3())
+
+      const isMobile = window.innerWidth < 768
+      const totalVerts = posAttr.count
+      const maxParticles = isMobile ? 30000 : 80000
+      const skip = Math.max(1, Math.floor(totalVerts / maxParticles))
+
+      console.log(`[ParticleHero] Sampling ${Math.floor(totalVerts / skip)} of ${totalVerts} vertices`)
+
+      for (let i = 0; i < totalVerts; i += skip) {
+        const x = posAttr.getX(i)
+        const y = posAttr.getY(i)
+        const z = posAttr.getZ(i)
+
+        // Brightness based on position in bounding box
+        const normalizedY = (y - meshBox.min.y) / meshSize.y
+        const normalizedZ = (z - meshBox.min.z) / meshSize.z
+        const brightness = 0.5 + normalizedY * 0.3 + normalizedZ * 0.2
+
+        positions.push(x, y, z)
+        alphas.push(brightness)
+        sizes.push(1.0 + brightness * 1.8)
+
+        // Random start position (sphere for entrance animation)
+        const theta = Math.random() * Math.PI * 2
+        const phi = Math.acos(2 * Math.random() - 1)
+        const r = 8 + Math.random() * 6
+        randomStarts.push(
+          r * Math.sin(phi) * Math.cos(theta),
+          r * Math.sin(phi) * Math.sin(theta),
+          r * Math.cos(phi)
+        )
+      }
 
       if (positions.length === 0) {
         console.error('No vertices found in model')
@@ -247,6 +256,13 @@ export function ParticleHero() {
 
       points = new THREE.Points(geo, mat)
       scene.add(points)
+      console.log('[ParticleHero] Points added to scene')
+    },
+    (progress) => {
+      console.log('[ParticleHero] Loading:', Math.round((progress.loaded / (progress.total || 1)) * 100) + '%')
+    },
+    (error) => {
+      console.error('[ParticleHero] GLB load error:', error)
     })
 
     // Render loop
