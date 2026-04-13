@@ -4,13 +4,13 @@ import { generateDailyPost } from '@/lib/claude/generatePost'
 import { sendWhatsApp } from '@/lib/whatsapp/send'
 
 /**
- * Transcribe a WhatsApp voice note via Gemini 2.5 Flash (multimodal audio)
- * and feed the transcript into generateDailyPost(). Replaces the old
- * OpenAI Whisper path — no more OpenAI dependency in Nivi.
+ * Transcribe a WhatsApp voice note via Gemini 2.5 Flash
+ * and generate a post from the transcript.
  */
 export async function handleVoiceNote(
   userId: string,
-  audioId: string
+  audioId: string,
+  messageId?: string
 ): Promise<void> {
   const supabase = getSupabaseAdmin()
   const { data: user } = await supabase
@@ -23,52 +23,66 @@ export async function handleVoiceNote(
 
   await sendWhatsApp(
     user.whatsapp_number,
-    '\ud83c\udfa4 Got your voice note. Writing a post from it now...'
+    '🎤 got your voice note. transcribing now...'
   )
 
   // Download audio via Unipile
-  const audioRes = await fetch(
-    `${process.env.UNIPILE_BASE_URL}/api/v1/media/${audioId}`,
-    {
-      headers: {
-        'X-API-KEY': process.env.UNIPILE_API_KEY!,
-      },
+  let audioBuffer: ArrayBuffer
+  let mimeType: string
+  try {
+    const downloadUrl = messageId && audioId
+      ? `${process.env.UNIPILE_BASE_URL}/api/v1/messages/${messageId}/attachments/${audioId}`
+      : `${process.env.UNIPILE_BASE_URL}/api/v1/media/${audioId}`
+
+    const audioRes = await fetch(downloadUrl, {
+      headers: { 'X-API-KEY': process.env.UNIPILE_API_KEY! },
+    })
+    if (!audioRes.ok) {
+      console.error('[voiceNote] download failed:', audioRes.status)
+      await sendWhatsApp(user.whatsapp_number, 'couldnt download the voice note, try again?')
+      return
     }
-  )
-  if (!audioRes.ok) {
-    console.error('[voiceNote] Unipile media fetch failed:', audioRes.status)
-    await sendWhatsApp(
-      user.whatsapp_number,
-      'hmm couldnt download that voice note, can you send it again?'
-    )
+    audioBuffer = await audioRes.arrayBuffer()
+    mimeType = audioRes.headers.get('content-type') ?? 'audio/ogg'
+  } catch (err) {
+    console.error('[voiceNote] download error:', err)
+    await sendWhatsApp(user.whatsapp_number, 'couldnt download the voice note, try again?')
     return
   }
 
-  const audioBuffer = await audioRes.arrayBuffer()
-  const base64Audio = Buffer.from(audioBuffer).toString('base64')
-  // Unipile returns a content-type header for media — trust it, fall back to ogg.
-  const mimeType = audioRes.headers.get('content-type') ?? 'audio/ogg'
+  // Transcribe with Gemini
+  const base64 = Buffer.from(audioBuffer).toString('base64')
+  const transcript = await transcribeWithGemini(base64, mimeType)
 
-  const transcript = await transcribeWithGemini(base64Audio, mimeType)
   if (!transcript) {
-    await sendWhatsApp(
-      user.whatsapp_number,
-      'hmm couldnt understand that voice note. try typing it or send another?'
-    )
+    await sendWhatsApp(user.whatsapp_number, 'couldnt understand that voice note. try typing it or send another?')
     return
   }
 
-  const post = await generateDailyPost(userId, transcript)
+  // Save transcript as conversation
+  await supabase.from('conversations').insert({
+    user_id: userId,
+    role: 'user',
+    content: `[voice note] ${transcript}`,
+  })
 
-  await sendWhatsApp(
-    user.whatsapp_number,
-    `Here's your post from the voice note:\n\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n${post.content}\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n\nReply POST / EDIT: [notes] / SKIP`
-  )
+  // Generate post from transcript
+  try {
+    const post = await generateDailyPost(userId, transcript)
+    await sendWhatsApp(
+      user.whatsapp_number,
+      `here's your post from the voice note:\n\n${post.content}\n\nreply POST to publish, EDIT to change, or SKIP`
+    )
+  } catch {
+    await sendWhatsApp(
+      user.whatsapp_number,
+      `transcribed your voice note:\n\n"${transcript}"\n\nwant me to turn this into a post?`
+    )
+  }
 }
 
 /**
- * Call Gemini 2.5 Flash with inline audio and ask for a clean transcript.
- * Returns the transcript or null on failure.
+ * Transcribe with Gemini 2.5 Flash (multimodal audio)
  */
 async function transcribeWithGemini(base64Audio: string, mimeType: string): Promise<string | null> {
   const apiKey = getEnv('GEMINI_API_KEY')
@@ -81,16 +95,12 @@ async function transcribeWithGemini(base64Audio: string, mimeType: string): Prom
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                {
-                  text: 'Transcribe this voice note verbatim. Output only the spoken words, no formatting, no speaker labels, no commentary. If the audio is unclear or silent, return an empty string.',
-                },
-                { inline_data: { mime_type: mimeType, data: base64Audio } },
-              ],
-            },
-          ],
+          contents: [{
+            parts: [
+              { text: 'Transcribe this voice note verbatim. Output only the spoken words, no formatting, no labels, no commentary.' },
+              { inline_data: { mime_type: mimeType, data: base64Audio } },
+            ],
+          }],
           generationConfig: { maxOutputTokens: 2048, temperature: 0.1 },
         }),
       }
@@ -98,13 +108,12 @@ async function transcribeWithGemini(base64Audio: string, mimeType: string): Prom
 
     const data = await res.json()
     if (data.error) {
-      console.error('[voiceNote] Gemini transcribe error:', data.error.message)
+      console.error('[voiceNote] Gemini error:', data.error.message)
       return null
     }
-    const text: string = data.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
-    return text.trim() || null
+    return (data.candidates?.[0]?.content?.parts?.[0]?.text ?? '').trim() || null
   } catch (err) {
-    console.error('[voiceNote] Gemini transcribe failed:', err)
+    console.error('[voiceNote] Gemini failed:', err)
     return null
   }
 }
