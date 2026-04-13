@@ -97,7 +97,7 @@ async function findOrCreateChat(
     return chat.id
   }
 
-  // Create new chat by sending first message
+  // Create new chat
   const createRes = await fetch(
     `${process.env.UNIPILE_BASE_URL}/api/v1/chats`,
     {
@@ -108,7 +108,8 @@ async function findOrCreateChat(
       },
       body: JSON.stringify({
         account_id: accountId,
-        attendee_id: `${phoneNumber}@s.whatsapp.net`,
+        attendees_ids: [`${phoneNumber}@s.whatsapp.net`],
+        text: ' ',
       }),
     }
   )
