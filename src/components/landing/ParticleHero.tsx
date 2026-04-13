@@ -109,7 +109,7 @@ export function ParticleHero() {
 
       const imgW = canvas.width
       const imgH = canvas.height
-      const scaleX = 3.2 // spread in 3D space
+      const scaleX = 5.0 // larger spread — fill viewport
       const scaleY = scaleX * aspect
 
       for (let y = 0; y < imgH; y += step) {
@@ -284,51 +284,37 @@ export function ParticleHero() {
         {/* Cursor glow overlay (CSS, follows mouse for extra glow) */}
         <div className="absolute inset-0 pointer-events-none" id="cursor-glow" />
 
-        {/* Text overlay */}
+        {/* Text overlay — bottom left */}
         <motion.div
-          className="relative z-10 flex flex-col items-center justify-center h-full text-center px-8"
+          className="absolute z-10 bottom-0 left-0 p-8 sm:p-12 lg:p-16 max-w-2xl"
           style={{ opacity: textOpacity, y: textY }}
         >
-          <div className="inline-flex items-center gap-2 border border-[#333] rounded-full px-4 py-1.5 mb-8 backdrop-blur-sm bg-black/30">
-            <span className="w-2 h-2 rounded-full bg-[#22c55e] animate-pulse" />
-            <span className="text-xs text-[#a0a0a0] font-sans">
-              Your AI LinkedIn brand strategist
-            </span>
-          </div>
+          <p className="text-[11px] sm:text-xs text-[#888] uppercase tracking-[0.2em] font-medium mb-4">
+            Your LinkedIn personal branding strategist
+          </p>
 
-          <h1 className="font-sans text-[48px] sm:text-[64px] lg:text-[80px] font-bold leading-[1.05] tracking-tight mb-6">
-            Your LinkedIn.
+          <h1 className="font-sans text-[48px] sm:text-[64px] lg:text-[80px] font-bold leading-[0.95] tracking-tight mb-6">
+            Say hello
             <br />
-            <span className="bg-gradient-to-r from-white via-white to-[#888] bg-clip-text text-transparent">
-              On autopilot.
+            <span className="italic font-light bg-gradient-to-r from-white via-[#c4b5fd] to-[#888] bg-clip-text text-transparent">
+              Nivi.
             </span>
           </h1>
 
-          <p className="text-[#999] text-base sm:text-lg leading-relaxed mb-10 max-w-xl mx-auto">
-            Nivi learns your voice, writes daily posts, drafts strategic comments,
-            and delivers everything to your WhatsApp.{' '}
-            <span className="text-white font-medium">
-              Reply &quot;ok&quot; to publish.
-            </span>
-          </p>
-
-          <div className="flex items-center justify-center gap-4 mb-4">
+          <div className="flex items-center gap-4">
             <Link
               href="/sign-up"
-              className="bg-white text-black text-sm px-8 py-3.5 rounded-lg font-medium hover:bg-white/90 transition-all hover:shadow-[0_0_30px_rgba(255,255,255,0.12)]"
+              className="bg-white text-black text-sm px-7 py-3 rounded-lg font-medium hover:bg-white/90 transition-all hover:shadow-[0_0_30px_rgba(255,255,255,0.12)]"
             >
-              Start 7-day free trial
+              Request Access
             </Link>
             <Link
               href="#how"
-              className="border border-[#333] text-sm px-8 py-3.5 rounded-lg text-[#aaa] hover:text-white hover:border-[#555] transition-colors"
+              className="border border-[#333] text-sm px-7 py-3 rounded-lg text-[#aaa] hover:text-white hover:border-[#555] transition-colors"
             >
-              See how it works
+              Learn more
             </Link>
           </div>
-          <p className="text-xs text-[#555] font-sans">
-            No credit card required. Cancel anytime.
-          </p>
         </motion.div>
 
         {/* Bottom fade */}
