@@ -219,7 +219,7 @@ export default function OverviewPage() {
   }
 
   return (
-    <div className="px-6 py-6 max-w-[1400px]">
+    <div className="px-6 py-6">
       {/* ──── PROFILE HERO ──── */}
       <div className="bg-card border border-border rounded-xl p-6 mb-6">
         <div className="flex items-start gap-5">
@@ -454,11 +454,9 @@ export default function OverviewPage() {
       })()}
 
       {/* ──── INSIGHTS ──── */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1.2fr_1fr] gap-4">
-        {/* LEFT column */}
-        <div className="space-y-4">
-          {/* Impressions chart */}
-          <SectionCard title="Impressions" description="Last 30 days">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Impressions chart */}
+        <SectionCard title="Impressions" description="Last 30 days">
             {hasAnyData ? (
               <div className="h-[200px] -mx-2">
                 <ResponsiveContainer width="100%" height="100%">
@@ -516,12 +514,8 @@ export default function OverviewPage() {
             )}
           </SectionCard>
 
-        </div>
-
-        {/* RIGHT column */}
-        <div className="space-y-4">
-          {/* Content pillars */}
-          <SectionCard title="Content pillars">
+        {/* Content pillars */}
+        <SectionCard title="Content pillars">
             {(data?.pillarPerformance ?? []).some((p) => p.count > 0) ? (
               <div className="h-[160px]">
                 <ResponsiveContainer width="100%" height="100%">
@@ -665,7 +659,6 @@ export default function OverviewPage() {
               />
             )}
           </SectionCard>
-        </div>
 
         {/* Top performing posts — full width row */}
         <SectionCard
