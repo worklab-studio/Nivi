@@ -1,15 +1,16 @@
 'use client'
 
-import { useRef, useEffect, useState } from 'react'
+import { useRef, useEffect } from 'react'
 import Link from 'next/link'
 import { motion, useScroll, useTransform } from 'framer-motion'
 import * as THREE from 'three'
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
+import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js'
 
 export function ParticleHero() {
   const sectionRef = useRef<HTMLElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const mouseRef = useRef({ x: 0, y: 0 })
-  const [, setMounted] = useState(false)
 
   const { scrollYProgress } = useScroll({
     target: sectionRef,
@@ -26,9 +27,10 @@ export function ParticleHero() {
     const container = containerRef.current
     if (!container) return
 
-    // ── Setup ──
     const w = container.clientWidth
     const h = container.clientHeight
+
+    // Renderer
     const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: false })
     renderer.setSize(w, h)
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
@@ -37,7 +39,7 @@ export function ParticleHero() {
     Object.assign(renderer.domElement.style, { position: 'absolute', inset: '0' })
 
     const scene = new THREE.Scene()
-    const camera = new THREE.PerspectiveCamera(50, w / h, 0.1, 100)
+    const camera = new THREE.PerspectiveCamera(50, w / h, 0.1, 200)
     camera.position.z = 5
     const initialCamZ = 5
 
@@ -46,7 +48,7 @@ export function ParticleHero() {
     const startTime = performance.now()
     let animId = 0
 
-    // ── Mouse ──
+    // Mouse
     const onMouseMove = (e: MouseEvent) => {
       const rect = container.getBoundingClientRect()
       mouseRef.current.x = ((e.clientX - rect.left) / rect.width) * 2 - 1
@@ -63,132 +65,81 @@ export function ParticleHero() {
     container.addEventListener('mouseleave', onMouseLeave)
     window.addEventListener('touchmove', onTouchMove, { passive: true })
 
-    // ── Load image → create particles ──
-    const img = new Image()
-    img.crossOrigin = 'anonymous'
-    img.src = '/face-particles.png'
-    img.onload = () => {
-      const c = document.createElement('canvas')
-      const sampleSize = 500
-      const aspect = img.height / img.width
-      c.width = sampleSize
-      c.height = sampleSize * aspect
-      const ctx = c.getContext('2d')!
-      ctx.drawImage(img, 0, 0, c.width, c.height)
-      const data = ctx.getImageData(0, 0, c.width, c.height)
-
-      const isMobile = window.innerWidth < 768
-      const step = isMobile ? 3 : 1  // maximum density
-
+    // Load 3D model (Draco compressed)
+    const dracoLoader = new DRACOLoader()
+    dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.7/')
+    const loader = new GLTFLoader()
+    loader.setDRACOLoader(dracoLoader)
+    loader.load('/nivi-model.glb', (gltf) => {
+      // Extract all vertices from the model
       const positions: number[] = []
       const randomStarts: number[] = []
       const alphas: number[] = []
       const sizes: number[] = []
 
-      const imgW = c.width
-      const imgH = c.height
-      const spread = 3.8
-      const spreadY = spread * aspect
+      gltf.scene.traverse((child) => {
+        if (child instanceof THREE.Mesh && child.geometry) {
+          const geo = child.geometry
+          const posAttr = geo.attributes.position
+          if (!posAttr) return
 
-      // Compute simple edge/gradient for depth
-      const getLum = (x: number, y: number) => {
-        if (x < 0 || x >= imgW || y < 0 || y >= imgH) return 0
-        const i = (y * imgW + x) * 4
-        return (data.data[i] + data.data[i + 1] + data.data[i + 2]) / 3
-      }
+          const isMobile = window.innerWidth < 768
+          // Sample vertices — skip some for performance
+          const totalVerts = posAttr.count
+          const maxParticles = isMobile ? 30000 : 80000
+          const skip = Math.max(1, Math.floor(totalVerts / maxParticles))
 
-      for (let y = 0; y < imgH; y += step) {
-        for (let x = 0; x < imgW; x += step) {
-          const lum = getLum(x, y)
-          if (lum < 5) continue  // capture almost everything
+          for (let i = 0; i < totalVerts; i += skip) {
+            const x = posAttr.getX(i)
+            const y = posAttr.getY(i)
+            const z = posAttr.getZ(i)
 
-          const brightness = lum / 255
-          // Boost dark areas so eyes/hair are visible
-          const boostedBrightness = Math.pow(brightness, 0.6)  // gamma boost — lifts darks
-
-          // 3D position
-          const px = (x / imgW - 0.5) * spread
-          const py = -(y / imgH - 0.5) * spreadY
-
-          // Pseudo-3D depth:
-          // - brightness = closer (nose, forehead bright = forward)
-          // - edge gradient = contour depth
-          // - center bias = nose is closest
-          const gx = getLum(x + step, y) - getLum(x - step, y)
-          const gy = getLum(x, y + step) - getLum(x, y - step)
-          const gradient = Math.sqrt(gx * gx + gy * gy) / 255
-
-          const centerDist = Math.sqrt(
-            Math.pow((x / imgW - 0.5) * 2, 2) +
-            Math.pow((y / imgH - 0.45) * 2, 2) // slightly above center for nose
-          )
-          const centerBias = Math.max(0, 1 - centerDist) * 0.3
-
-          const pz = brightness * 1.5 - gradient * 0.7 + centerBias + (Math.random() - 0.5) * 0.3
-
-          positions.push(px, py, pz)
-          alphas.push(boostedBrightness)
-          sizes.push(1.2 + boostedBrightness * 2.0)
-
-          // Random start: spiral sphere
-          const theta = Math.random() * Math.PI * 2
-          const phi = Math.acos(2 * Math.random() - 1)
-          const r = 6 + Math.random() * 6
-          randomStarts.push(
-            r * Math.sin(phi) * Math.cos(theta),
-            r * Math.sin(phi) * Math.sin(theta),
-            r * Math.cos(phi)
-          )
-        }
-      }
-
-      // ── Floating logo particles ──
-      const logos = [
-        { text: 'in', x: -3.0, y: 0.6, scale: 1.0 },       // LinkedIn
-        { text: 'AI', x: 2.8, y: -0.3, scale: 0.9 },       // AI
-        { text: '◆', x: -2.5, y: -1.3, scale: 0.8 },       // Claude
-        { text: '✦', x: 2.3, y: 1.3, scale: 0.7 },         // ChatGPT
-        { text: '⚡', x: -1.5, y: 1.8, scale: 0.65 },      // Spark
-        { text: '◈', x: 3.0, y: -1.6, scale: 0.65 },       // Extra
-      ]
-
-      for (const logo of logos) {
-        const lc = document.createElement('canvas')
-        lc.width = 120
-        lc.height = 120
-        const lctx = lc.getContext('2d')!
-        lctx.fillStyle = 'white'
-        lctx.font = `bold ${Math.floor(80 * logo.scale)}px Arial`
-        lctx.textAlign = 'center'
-        lctx.textBaseline = 'middle'
-        lctx.fillText(logo.text, 60, 60)
-
-        const ld = lctx.getImageData(0, 0, 120, 120)
-        const logoStep = 1  // max density for logos
-        for (let ly = 0; ly < 120; ly += logoStep) {
-          for (let lx = 0; lx < 120; lx += logoStep) {
-            const li = (ly * 120 + lx) * 4
-            if (ld.data[li] > 60) {
-              const b = ld.data[li] / 255
-              const px = logo.x + (lx / 120 - 0.5) * logo.scale
-              const py = logo.y + -(ly / 120 - 0.5) * logo.scale
-              const pz = (Math.random() - 0.5) * 0.2
-
-              positions.push(px, py, pz)
-              alphas.push(b * 0.8)
-              sizes.push(1.2 + b * 1.5)
-
-              const theta = Math.random() * Math.PI * 2
-              const phi = Math.acos(2 * Math.random() - 1)
-              const r = 8 + Math.random() * 5
-              randomStarts.push(
-                r * Math.sin(phi) * Math.cos(theta),
-                r * Math.sin(phi) * Math.sin(theta),
-                r * Math.cos(phi)
-              )
+            // Get color/brightness from vertex normals for shading
+            let brightness = 0.7
+            if (geo.attributes.normal) {
+              const ny = geo.attributes.normal.getY(i)
+              brightness = 0.4 + Math.max(0, ny) * 0.6 // front-facing = brighter
             }
+
+            positions.push(x, y, z)
+            alphas.push(brightness)
+            sizes.push(1.0 + brightness * 1.8)
+
+            // Random start position (sphere for entrance animation)
+            const theta = Math.random() * Math.PI * 2
+            const phi = Math.acos(2 * Math.random() - 1)
+            const r = 8 + Math.random() * 6
+            randomStarts.push(
+              r * Math.sin(phi) * Math.cos(theta),
+              r * Math.sin(phi) * Math.sin(theta),
+              r * Math.cos(phi)
+            )
           }
         }
+      })
+
+      if (positions.length === 0) {
+        console.error('No vertices found in model')
+        return
+      }
+
+      console.log(`[ParticleHero] Loaded ${positions.length / 3} particles from 3D model`)
+
+      // Center and scale the model
+      const tempGeo = new THREE.BufferGeometry()
+      tempGeo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+      tempGeo.computeBoundingBox()
+      const box = tempGeo.boundingBox!
+      const center = box.getCenter(new THREE.Vector3())
+      const size = box.getSize(new THREE.Vector3())
+      const maxDim = Math.max(size.x, size.y, size.z)
+      const scale = 3.5 / maxDim // fit within ~3.5 units
+
+      // Apply centering and scaling
+      for (let i = 0; i < positions.length; i += 3) {
+        positions[i] = (positions[i] - center.x) * scale
+        positions[i + 1] = (positions[i + 1] - center.y) * scale
+        positions[i + 2] = (positions[i + 2] - center.z) * scale
       }
 
       const geo = new THREE.BufferGeometry()
@@ -224,17 +175,15 @@ export function ParticleHero() {
           varying float vDepth;
 
           void main() {
-            // Entrance animation: cubic ease-out
+            // Entrance: spiral in from random positions
             float t = 1.0 - pow(1.0 - clamp(uFormProgress, 0.0, 1.0), 3.0);
             vec3 pos = mix(aRandomStart, position, t);
 
-            // Subtle constant drift — particles float gently
+            // Subtle drift
             float drift = uTime * 0.15;
-            pos.x += sin(drift + position.y * 4.0 + position.z * 2.0) * 0.008;
-            pos.y += cos(drift * 0.8 + position.x * 3.0 + position.z) * 0.008;
-            pos.z += sin(drift * 0.6 + position.x * position.y * 3.0) * 0.005;
-
-            // No particle scaling — camera moves forward instead
+            pos.x += sin(drift + position.y * 3.0 + position.z * 2.0) * 0.005;
+            pos.y += cos(drift * 0.8 + position.x * 3.0 + position.z) * 0.005;
+            pos.z += sin(drift * 0.6 + position.x * position.y * 2.0) * 0.003;
 
             vec4 mvPos = modelViewMatrix * vec4(pos, 1.0);
             gl_Position = projectionMatrix * mvPos;
@@ -243,18 +192,19 @@ export function ParticleHero() {
             float mouseDist = distance(pos.xy, uMouse.xy);
             vGlow = smoothstep(2.0, 0.0, mouseDist);
 
-            // Internal glow: center of face glows from within
+            // Inner glow from center
             float centerDist = length(position.xy);
-            float innerGlow = smoothstep(2.5, 0.0, centerDist) * 0.3;
+            float innerGlow = smoothstep(2.0, 0.0, centerDist) * 0.25;
+
+            // Scroll glow (brighter as camera zooms in)
+            float scrollGlow = smoothstep(0.2, 0.6, uScroll) * 0.8;
 
             // Point size
-            float sz = aSize * (1.0 + vGlow * 1.8 + innerGlow * 0.5) * uPixelRatio;
+            float sz = aSize * (1.0 + vGlow * 2.0 + innerGlow) * uPixelRatio;
             gl_PointSize = sz * (1.0 / -mvPos.z);
 
-            // Alpha: bright base + scroll glow (particles get brighter as camera zooms in)
-            float scrollGlow = smoothstep(0.2, 0.6, uScroll) * 0.8;
-            vAlpha = (aAlpha * 1.2 + innerGlow * 0.6 + vGlow * 0.4 + scrollGlow) * t;
-            // Fade to white at the end (particles dissolve into white bg)
+            // Alpha
+            vAlpha = (aAlpha * 1.0 + innerGlow * 0.5 + vGlow * 0.5 + scrollGlow) * t;
             vAlpha *= 1.0 - smoothstep(0.75, 1.0, uScroll);
             vAlpha = clamp(vAlpha, 0.0, 1.0);
 
@@ -271,28 +221,24 @@ export function ParticleHero() {
             float d = length(gl_PointCoord - vec2(0.5));
             if (d > 0.5) discard;
 
-            // Softer falloff for glow effect
             float strength = 1.0 - smoothstep(0.0, 0.5, d);
             strength = pow(strength, 1.2);
 
-            // Color: bright particles — epiminds style
-            vec3 shadow = vec3(0.4, 0.35, 0.65);      // darker areas: deep purple
-            vec3 mid = vec3(0.7, 0.65, 0.95);          // mid tones: bright lavender
-            vec3 highlight = vec3(0.95, 0.92, 1.0);    // highlights: near white
+            // Color: blue-purple base → white on glow
+            vec3 shadow = vec3(0.35, 0.32, 0.6);
+            vec3 mid = vec3(0.6, 0.55, 0.85);
+            vec3 highlight = vec3(0.9, 0.88, 1.0);
 
-            // Brightness-based color (aAlpha carries original brightness)
-            vec3 color = mix(shadow, mid, smoothstep(0.2, 0.5, vAlpha));
+            vec3 color = mix(shadow, mid, smoothstep(0.2, 0.6, vAlpha));
             color = mix(color, highlight, smoothstep(0.5, 0.9, vAlpha));
+            color = mix(color, vec3(1.0), vGlow * 0.6);
 
-            // Cursor makes even brighter
-            color = mix(color, vec3(1.0), vGlow * 0.5);
-
-            // Scroll: particles turn white-hot as camera zooms through
+            // Scroll: turn white
             float scrollWhite = smoothstep(0.3, 0.65, uScroll);
             color = mix(color, vec3(1.0, 0.98, 1.0), scrollWhite);
 
-            // Depth: forward = brighter
-            color += vDepth * vec3(0.12, 0.1, 0.18);
+            // Depth tint
+            color += vDepth * vec3(0.06, 0.04, 0.1);
 
             gl_FragColor = vec4(color, vAlpha * strength);
           }
@@ -301,13 +247,11 @@ export function ParticleHero() {
 
       points = new THREE.Points(geo, mat)
       scene.add(points)
-      setMounted(true)
-    }
+    })
 
-    // ── Render loop ──
+    // Render loop
     function animate() {
       const elapsed = (performance.now() - startTime) / 1000
-
       const scroll = scrollYProgress.get()
 
       if (mat) {
@@ -315,11 +259,7 @@ export function ParticleHero() {
         mat.uniforms.uFormProgress.value = Math.min(1, elapsed / 2.5)
         mat.uniforms.uScroll.value = scroll
 
-        // Camera zooms INTO the face — parallax effect
-        // 0% scroll: z=5 (normal view)
-        // 50% scroll: z=1.5 (close up on face)
-        // 80% scroll: z=0.3 (inside the particles)
-        // 100% scroll: z=-0.5 (through and past)
+        // Camera zooms into face on scroll
         const targetZ = initialCamZ - scroll * 6.0
         camera.position.z = Math.max(-0.5, targetZ)
 
@@ -332,7 +272,7 @@ export function ParticleHero() {
         mat.uniforms.uMouse.value.set(worldMouse.x, worldMouse.y, 0)
       }
 
-      // Head rotation following cursor (smooth lerp)
+      // Head rotation following cursor
       if (points) {
         const targetRotY = mouseRef.current.x * 0.2
         const targetRotX = -mouseRef.current.y * 0.12
@@ -345,7 +285,7 @@ export function ParticleHero() {
     }
     animate()
 
-    // ── Resize ──
+    // Resize
     const onResize = () => {
       const w = container.clientWidth
       const h = container.clientHeight
@@ -375,9 +315,8 @@ export function ParticleHero() {
         {/* Three.js canvas */}
         <div ref={containerRef} className="absolute inset-0" />
 
-        {/* LinkedIn blue backlight glow */}
+        {/* LinkedIn blue backlight */}
         <div className="absolute inset-0 pointer-events-none">
-          {/* Outer soft blue */}
           <div
             className="absolute top-[35%] left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full blur-3xl"
             style={{
@@ -386,7 +325,6 @@ export function ParticleHero() {
               background: 'radial-gradient(ellipse, rgba(0,119,181,0.1) 0%, transparent 70%)',
             }}
           />
-          {/* Inner brighter blue */}
           <div
             className="absolute top-[32%] left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full blur-2xl"
             style={{
@@ -397,7 +335,7 @@ export function ParticleHero() {
           />
         </div>
 
-        {/* Text — bottom left, aligned with nav padding */}
+        {/* Text — bottom left */}
         <motion.div
           className="absolute z-10 left-0 right-0 px-6 sm:px-10 lg:px-16"
           style={{ bottom: 48, opacity: textOpacity }}
@@ -419,20 +357,10 @@ export function ParticleHero() {
           </Link>
         </motion.div>
 
-        {/* Bottom fade — adapts to scroll bg transition */}
-        <motion.div
-          className="absolute bottom-0 left-0 right-0 h-40 pointer-events-none"
-          style={{
-            background: useTransform(
-              scrollYProgress,
-              [0, 0.7, 1],
-              [
-                'linear-gradient(to top, rgba(10,10,10,1), transparent)',
-                'linear-gradient(to top, rgba(10,10,10,0.5), transparent)',
-                'linear-gradient(to top, rgba(255,255,255,1), transparent)',
-              ]
-            ),
-          }}
+        {/* Bottom fade */}
+        <div
+          className="absolute bottom-0 left-0 right-0 h-32 pointer-events-none"
+          style={{ background: 'linear-gradient(to top, rgba(10,10,10,0.8), transparent)' }}
         />
       </div>
     </motion.section>
