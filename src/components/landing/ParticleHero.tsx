@@ -103,14 +103,14 @@ export function ParticleHero() {
         const y = posAttr.getY(i)
         const z = posAttr.getZ(i)
 
-        // Brightness based on position in bounding box
+        // Brightness: front-facing (high Z) and upper areas (high Y) are brighter
         const normalizedY = (y - meshBox.min.y) / meshSize.y
         const normalizedZ = (z - meshBox.min.z) / meshSize.z
-        const brightness = 0.5 + normalizedY * 0.3 + normalizedZ * 0.2
+        const brightness = 0.6 + normalizedY * 0.25 + normalizedZ * 0.15
 
         positions.push(x, y, z)
         alphas.push(brightness)
-        sizes.push(1.0 + brightness * 1.8)
+        sizes.push(2.0 + brightness * 3.0)
 
         // Random start position (sphere for entrance animation)
         const theta = Math.random() * Math.PI * 2
@@ -208,8 +208,8 @@ export function ParticleHero() {
             float sz = aSize * (1.0 + vGlow * 2.0 + innerGlow) * uPixelRatio;
             gl_PointSize = sz * (1.0 / -mvPos.z);
 
-            // Alpha
-            vAlpha = (aAlpha * 1.0 + innerGlow * 0.5 + vGlow * 0.5 + scrollGlow) * t;
+            // Alpha: always bright
+            vAlpha = (aAlpha * 1.4 + innerGlow * 0.5 + vGlow * 0.5 + scrollGlow) * t;
             vAlpha *= 1.0 - smoothstep(0.75, 1.0, uScroll);
             vAlpha = clamp(vAlpha, 0.0, 1.0);
 
@@ -229,14 +229,14 @@ export function ParticleHero() {
             float strength = 1.0 - smoothstep(0.0, 0.5, d);
             strength = pow(strength, 1.2);
 
-            // Color: blue-purple base → white on glow
-            vec3 shadow = vec3(0.35, 0.32, 0.6);
-            vec3 mid = vec3(0.6, 0.55, 0.85);
-            vec3 highlight = vec3(0.9, 0.88, 1.0);
+            // Color: bright lavender → white
+            vec3 shadow = vec3(0.5, 0.45, 0.75);
+            vec3 mid = vec3(0.75, 0.7, 0.95);
+            vec3 highlight = vec3(0.95, 0.93, 1.0);
 
-            vec3 color = mix(shadow, mid, smoothstep(0.2, 0.6, vAlpha));
-            color = mix(color, highlight, smoothstep(0.5, 0.9, vAlpha));
-            color = mix(color, vec3(1.0), vGlow * 0.6);
+            vec3 color = mix(shadow, mid, smoothstep(0.15, 0.5, vAlpha));
+            color = mix(color, highlight, smoothstep(0.4, 0.85, vAlpha));
+            color = mix(color, vec3(1.0), vGlow * 0.7);
 
             // Scroll: turn white
             float scrollWhite = smoothstep(0.3, 0.65, uScroll);
