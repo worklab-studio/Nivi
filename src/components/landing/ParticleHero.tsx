@@ -167,10 +167,14 @@ export function ParticleHero() {
             float mouseDist = distance(position.xy, uMouse.xy);
             vGlow = smoothstep(2.0, 0.0, mouseDist);
 
-            // Subtle visible breathing
-            pos.z += sin(uTime * 0.5 + position.x * 2.5 + position.y * 2.0) * 0.012;
-            pos.x += sin(uTime * 0.35 + position.y * 3.0) * 0.002;
-            pos.y += cos(uTime * 0.3 + position.x * 3.0) * 0.002;
+            // Breathing wobble — visible in/out on Z
+            pos.z += sin(uTime * 0.6 + position.x * 2.0 + position.y * 1.5) * 0.025;
+
+            // Bottom particles: continuous dissolve/reform movement
+            float bottomFactor = smoothstep(0.0, -1.5, position.y); // 1.0 at bottom, 0.0 at top
+            pos.x += sin(uTime * 1.5 + position.x * 8.0 + position.y * 3.0) * bottomFactor * 0.04;
+            pos.y += cos(uTime * 1.2 + position.y * 6.0) * bottomFactor * 0.05;
+            pos.z += sin(uTime * 2.0 + position.x * 5.0) * bottomFactor * 0.06;
 
             vec4 mvPos = modelViewMatrix * vec4(pos, 1.0);
             gl_Position = projectionMatrix * mvPos;
