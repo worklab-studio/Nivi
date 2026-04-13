@@ -34,7 +34,7 @@ export function ParticleHero() {
 
     const scene = new THREE.Scene()
     const camera = new THREE.PerspectiveCamera(50, w / h, 0.1, 100)
-    camera.position.z = 5
+    camera.position.z = 3.5  // closer camera — face fills viewport
 
     let points: THREE.Points | null = null
     let mat: THREE.ShaderMaterial | null = null
@@ -121,7 +121,7 @@ export function ParticleHero() {
 
           positions.push(px, py, pz)
           alphas.push(brightness)
-          sizes.push(2.0 + brightness * 2.5)
+          sizes.push(2.5 + brightness * 3.5)  // bigger particles, brighter = bigger
 
           // Random start: spiral sphere
           const theta = Math.random() * Math.PI * 2
@@ -197,8 +197,8 @@ export function ParticleHero() {
             float sz = aSize * (1.0 + vGlow * 1.8 + innerGlow * 0.5) * uPixelRatio;
             gl_PointSize = sz * (1.0 / -mvPos.z);
 
-            // Alpha: BRIGHT base — face must be clearly visible
-            vAlpha = (aAlpha * 0.9 + innerGlow * 0.5 + vGlow * 0.3) * t;
+            // Alpha: VERY BRIGHT — face must glow
+            vAlpha = (aAlpha * 1.2 + innerGlow * 0.6 + vGlow * 0.4) * t;
             vAlpha *= 1.0 - smoothstep(0.55, 1.0, uScroll);
             vAlpha = clamp(vAlpha, 0.0, 1.0);
 
@@ -218,17 +218,20 @@ export function ParticleHero() {
             float strength = 1.0 - smoothstep(0.0, 0.5, d);
             strength = pow(strength, 1.2);
 
-            // Color: bright lavender-blue base → pure white on glow
-            vec3 base = vec3(0.65, 0.6, 0.9);         // bright lavender
-            vec3 innerColor = vec3(0.8, 0.75, 1.0);   // bright purple-white
-            vec3 bright = vec3(1.0, 0.98, 1.0);       // pure white
+            // Color: bright particles — epiminds style
+            vec3 shadow = vec3(0.4, 0.35, 0.65);      // darker areas: deep purple
+            vec3 mid = vec3(0.7, 0.65, 0.95);          // mid tones: bright lavender
+            vec3 highlight = vec3(0.95, 0.92, 1.0);    // highlights: near white
 
-            // Mix based on depth + glow
-            vec3 color = mix(base, innerColor, smoothstep(-0.3, 0.5, vDepth));
-            color = mix(color, bright, vGlow * 0.8);
+            // Brightness-based color (aAlpha carries original brightness)
+            vec3 color = mix(shadow, mid, smoothstep(0.2, 0.5, vAlpha));
+            color = mix(color, highlight, smoothstep(0.5, 0.9, vAlpha));
 
-            // Depth luminance: forward particles brighter
-            color += vDepth * vec3(0.1, 0.08, 0.15);
+            // Cursor makes even brighter
+            color = mix(color, vec3(1.0), vGlow * 0.5);
+
+            // Depth: forward = brighter
+            color += vDepth * vec3(0.12, 0.1, 0.18);
 
             gl_FragColor = vec4(color, vAlpha * strength);
           }
@@ -301,14 +304,33 @@ export function ParticleHero() {
         {/* Three.js canvas */}
         <div ref={containerRef} className="absolute inset-0" />
 
-        {/* Ambient radial glow */}
+        {/* Backlight glow — layered for depth */}
         <div className="absolute inset-0 pointer-events-none">
+          {/* Large outer glow */}
           <div
-            className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full"
+            className="absolute top-[30%] left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full"
             style={{
-              width: '70%',
-              height: '80%',
-              background: 'radial-gradient(ellipse, rgba(100,80,200,0.2) 0%, rgba(70,50,160,0.08) 35%, transparent 65%)',
+              width: '90%',
+              height: '90%',
+              background: 'radial-gradient(ellipse, rgba(80,50,180,0.15) 0%, rgba(60,30,140,0.05) 40%, transparent 65%)',
+            }}
+          />
+          {/* Inner bright glow */}
+          <div
+            className="absolute top-[35%] left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full"
+            style={{
+              width: '45%',
+              height: '55%',
+              background: 'radial-gradient(ellipse, rgba(140,120,255,0.25) 0%, rgba(100,70,200,0.1) 50%, transparent 80%)',
+            }}
+          />
+          {/* Hot center glow */}
+          <div
+            className="absolute top-[32%] left-[52%] -translate-x-1/2 -translate-y-1/2 rounded-full"
+            style={{
+              width: '25%',
+              height: '30%',
+              background: 'radial-gradient(ellipse, rgba(180,160,255,0.2) 0%, transparent 70%)',
             }}
           />
         </div>
