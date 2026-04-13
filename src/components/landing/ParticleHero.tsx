@@ -167,13 +167,13 @@ export function ParticleHero() {
             float mouseDist = distance(position.xy, uMouse.xy);
             vGlow = smoothstep(2.0, 0.0, mouseDist);
 
-            // Subtle cursor repulsion
-            vec2 repDir = position.xy - uMouse.xy;
-            float repLen = length(repDir);
-            if (repLen > 0.01 && repLen < 1.0) {
-              pos.xy += normalize(repDir) * smoothstep(1.0, 0.0, repLen) * 0.02;
-              pos.z += smoothstep(1.0, 0.0, repLen) * 0.03;
-            }
+            // Cursor wobble — stretchy in/out effect (not separation)
+            float cursorDist = distance(position.xy, uMouse.xy);
+            float cursorInfluence = smoothstep(1.5, 0.0, cursorDist);
+            // Push forward in Z (stretch toward viewer) + subtle XY wobble
+            pos.z += cursorInfluence * 0.2 * sin(uTime * 3.0 + position.x * 5.0);
+            pos.x += cursorInfluence * 0.015 * sin(uTime * 4.0 + position.y * 6.0);
+            pos.y += cursorInfluence * 0.015 * cos(uTime * 3.5 + position.x * 6.0);
 
             vec4 mvPos = modelViewMatrix * vec4(pos, 1.0);
             gl_Position = projectionMatrix * mvPos;
