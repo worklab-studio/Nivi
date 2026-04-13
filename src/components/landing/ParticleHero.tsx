@@ -167,12 +167,12 @@ export function ParticleHero() {
             float mouseDist = distance(position.xy, uMouse.xy);
             vGlow = smoothstep(2.0, 0.0, mouseDist);
 
-            // Cursor repulsion — particles react to cursor
+            // Subtle cursor repulsion
             vec2 repDir = position.xy - uMouse.xy;
             float repLen = length(repDir);
-            if (repLen > 0.01 && repLen < 1.2) {
-              pos.xy += normalize(repDir) * smoothstep(1.2, 0.0, repLen) * 0.08;
-              pos.z += smoothstep(1.2, 0.0, repLen) * 0.15;
+            if (repLen > 0.01 && repLen < 1.0) {
+              pos.xy += normalize(repDir) * smoothstep(1.0, 0.0, repLen) * 0.02;
+              pos.z += smoothstep(1.0, 0.0, repLen) * 0.03;
             }
 
             vec4 mvPos = modelViewMatrix * vec4(pos, 1.0);
@@ -181,15 +181,15 @@ export function ParticleHero() {
             // Scroll glow
             float scrollGlow = smoothstep(0.2, 0.6, uScroll) * 0.5;
 
-            // Size: bigger on glow
-            float sz = aSize * (1.0 + vGlow * 2.5) * uPixelRatio;
+            // Size: subtle glow boost
+            float sz = aSize * (1.0 + vGlow * 0.8) * uPixelRatio;
             gl_PointSize = sz * (1.0 / -mvPos.z);
 
             vColor = aColor;
 
-            // Alpha: BRIGHT base + cursor boost
+            // Alpha: bright base + subtle cursor boost
             float lum = dot(aColor, vec3(0.299, 0.587, 0.114));
-            vAlpha = (lum * 2.0 + vGlow * 0.8 + scrollGlow) * t;
+            vAlpha = (lum * 2.0 + vGlow * 0.3 + scrollGlow) * t;
             vAlpha *= 1.0 - smoothstep(0.75, 1.0, uScroll);
             vAlpha = clamp(vAlpha, 0.0, 1.0);
           }
@@ -206,11 +206,16 @@ export function ParticleHero() {
             float strength = 1.0 - smoothstep(0.0, 0.5, d);
             strength = pow(strength, 1.3);
 
-            // Image color boosted significantly
-            vec3 color = vColor * 2.0;
+            // Tint image colors more purple-blue
+            vec3 color = vColor;
+            // Shift toward purple-blue
+            color.r *= 0.7;
+            color.g *= 0.65;
+            color.b *= 1.4;
+            color *= 1.8;
 
-            // Cursor makes particles glow bright white
-            color = mix(color, vec3(1.0, 0.95, 1.0), vGlow * 0.6);
+            // Subtle cursor brightening
+            color = mix(color, vec3(0.85, 0.8, 1.0), vGlow * 0.3);
 
             // Scroll white
             float scrollWhite = smoothstep(0.4, 0.7, uScroll);
