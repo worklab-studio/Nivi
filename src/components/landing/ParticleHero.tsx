@@ -399,8 +399,8 @@ export function ParticleHero() {
 
         {/* Text — bottom left, aligned with nav padding */}
         <motion.div
-          className="absolute z-10 left-0 right-0 px-5 sm:px-6"
-          style={{ bottom: 20, opacity: textOpacity }}
+          className="absolute z-10 left-0 right-0 px-6 sm:px-10 lg:px-16"
+          style={{ bottom: 48, opacity: textOpacity }}
         >
           <p className="text-[10px] sm:text-[11px] text-[#666] uppercase tracking-[0.3em] font-medium mb-3">
             Your LinkedIn personal branding strategist
