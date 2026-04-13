@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { FeaturesGrid } from '@/components/landing/FeaturesGrid'
+import { ParticleHero } from '@/components/landing/ParticleHero'
 
 export default async function LandingPage() {
   const { userId } = await auth()
@@ -26,38 +27,8 @@ export default async function LandingPage() {
         </div>
       </nav>
 
-      {/* ──── HERO ──── */}
-      <section className="max-w-5xl mx-auto px-8 pt-24 pb-20 text-center relative">
-        {/* Glow effect */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-gradient-radial from-blue-500/10 to-transparent rounded-full blur-3xl pointer-events-none" />
-
-        <div className="inline-flex items-center gap-2 border border-[#333] rounded-full px-4 py-1.5 mb-8 relative">
-          <span className="w-2 h-2 rounded-full bg-[#22c55e] animate-pulse" />
-          <span className="text-xs text-[#a0a0a0] font-sans">Your AI LinkedIn brand strategist — hellonivi.com</span>
-        </div>
-
-        <h1 className="font-sans text-[56px] sm:text-[72px] font-bold leading-[1.05] tracking-tight mb-6 relative">
-          Your LinkedIn.
-          <br />
-          <span className="bg-gradient-to-r from-white via-white to-[#888] bg-clip-text text-transparent">On autopilot.</span>
-        </h1>
-
-        <p className="text-[#999] text-lg sm:text-xl leading-relaxed mb-10 max-w-2xl mx-auto">
-          Nivi learns your voice, writes daily posts, drafts strategic comments,
-          and delivers everything to your WhatsApp.{' '}
-          <span className="text-white font-medium">Reply &quot;ok&quot; to publish.</span>
-        </p>
-
-        <div className="flex items-center justify-center gap-4 mb-4">
-          <Link href="/sign-up" className="bg-white text-black text-sm px-8 py-3.5 rounded-lg font-medium hover:bg-white/90 transition-all hover:shadow-[0_0_30px_rgba(255,255,255,0.12)]">
-            Start 7-day free trial
-          </Link>
-          <Link href="#how" className="border border-[#333] text-sm px-8 py-3.5 rounded-lg text-[#aaa] hover:text-white hover:border-[#555] transition-colors">
-            See how it works
-          </Link>
-        </div>
-        <p className="text-xs text-[#555] font-sans">No credit card required. Cancel anytime.</p>
-      </section>
+      {/* ──── HERO — Particle Face ──── */}
+      <ParticleHero />
 
       {/* ──── SOCIAL PROOF BAR ──── */}
       <section className="border-t border-b border-[#1a1a1a] py-6">
