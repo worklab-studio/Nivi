@@ -93,7 +93,7 @@ export function ParticleHero() {
 
       const isMobile = window.innerWidth < 768
       const totalVerts = posAttr.count
-      const maxParticles = isMobile ? 20000 : 50000
+      const maxParticles = isMobile ? 30000 : 85000
       const skip = Math.max(1, Math.floor(totalVerts / maxParticles))
 
       console.log(`[ParticleHero] Sampling ${Math.floor(totalVerts / skip)} of ${totalVerts} vertices`)
@@ -229,21 +229,23 @@ export function ParticleHero() {
             float strength = 1.0 - smoothstep(0.0, 0.5, d);
             strength = pow(strength, 1.2);
 
-            // Color: bright lavender → white
-            vec3 shadow = vec3(0.5, 0.45, 0.75);
-            vec3 mid = vec3(0.75, 0.7, 0.95);
-            vec3 highlight = vec3(0.95, 0.93, 1.0);
+            // Color: deep purple palette (matching epiminds reference)
+            vec3 shadow = vec3(0.35, 0.2, 0.6);       // deep purple shadows
+            vec3 mid = vec3(0.55, 0.4, 0.85);          // rich purple mids
+            vec3 highlight = vec3(0.75, 0.65, 1.0);    // bright lavender highlights
 
-            vec3 color = mix(shadow, mid, smoothstep(0.15, 0.5, vAlpha));
-            color = mix(color, highlight, smoothstep(0.4, 0.85, vAlpha));
-            color = mix(color, vec3(1.0), vGlow * 0.7);
+            vec3 color = mix(shadow, mid, smoothstep(0.2, 0.5, vAlpha));
+            color = mix(color, highlight, smoothstep(0.5, 0.9, vAlpha));
+
+            // Cursor glow pushes toward bright white-purple
+            color = mix(color, vec3(0.85, 0.78, 1.0), vGlow * 0.6);
 
             // Scroll: turn white
             float scrollWhite = smoothstep(0.3, 0.65, uScroll);
             color = mix(color, vec3(1.0, 0.98, 1.0), scrollWhite);
 
-            // Depth tint
-            color += vDepth * vec3(0.06, 0.04, 0.1);
+            // Depth tint — forward particles slightly brighter purple
+            color += vDepth * vec3(0.05, 0.03, 0.1);
 
             gl_FragColor = vec4(color, vAlpha * strength);
           }
@@ -327,22 +329,33 @@ export function ParticleHero() {
         {/* Three.js canvas */}
         <div ref={containerRef} className="absolute inset-0" />
 
-        {/* LinkedIn blue backlight */}
+        {/* Purple backlight glow */}
         <div className="absolute inset-0 pointer-events-none">
+          {/* Large outer purple atmosphere */}
           <div
-            className="absolute top-[35%] left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full blur-3xl"
+            className="absolute top-[38%] left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full blur-3xl"
             style={{
-              width: '55%',
-              height: '65%',
-              background: 'radial-gradient(ellipse, rgba(0,119,181,0.1) 0%, transparent 70%)',
+              width: '70%',
+              height: '80%',
+              background: 'radial-gradient(ellipse, rgba(120,80,220,0.15) 0%, rgba(80,40,180,0.05) 40%, transparent 70%)',
             }}
           />
+          {/* Inner bright purple behind head */}
           <div
-            className="absolute top-[32%] left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full blur-2xl"
+            className="absolute top-[35%] left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full blur-2xl"
             style={{
-              width: '30%',
-              height: '40%',
-              background: 'radial-gradient(ellipse, rgba(0,119,181,0.08) 0%, transparent 65%)',
+              width: '40%',
+              height: '50%',
+              background: 'radial-gradient(ellipse, rgba(140,100,255,0.2) 0%, rgba(100,60,200,0.08) 50%, transparent 75%)',
+            }}
+          />
+          {/* Hot core glow */}
+          <div
+            className="absolute top-[33%] left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full blur-xl"
+            style={{
+              width: '20%',
+              height: '25%',
+              background: 'radial-gradient(ellipse, rgba(160,130,255,0.15) 0%, transparent 65%)',
             }}
           />
         </div>
