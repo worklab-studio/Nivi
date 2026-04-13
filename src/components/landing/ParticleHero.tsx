@@ -61,7 +61,7 @@ export function ParticleHero() {
     // ── Load image → create particles ──
     const img = new Image()
     img.crossOrigin = 'anonymous'
-    img.src = '/face-particles.jpg'
+    img.src = '/face-particles.png'
     img.onload = () => {
       const c = document.createElement('canvas')
       const sampleSize = 500
@@ -353,33 +353,14 @@ export function ParticleHero() {
         {/* Three.js canvas */}
         <div ref={containerRef} className="absolute inset-0" />
 
-        {/* Backlight glow — layered for depth */}
+        {/* Subtle backlight — soft blur, not solid */}
         <div className="absolute inset-0 pointer-events-none">
-          {/* Large outer glow */}
           <div
-            className="absolute top-[30%] left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full"
+            className="absolute top-[30%] left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full blur-3xl"
             style={{
-              width: '90%',
-              height: '90%',
-              background: 'radial-gradient(ellipse, rgba(80,50,180,0.15) 0%, rgba(60,30,140,0.05) 40%, transparent 65%)',
-            }}
-          />
-          {/* Inner bright glow */}
-          <div
-            className="absolute top-[35%] left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full"
-            style={{
-              width: '45%',
-              height: '55%',
-              background: 'radial-gradient(ellipse, rgba(140,120,255,0.25) 0%, rgba(100,70,200,0.1) 50%, transparent 80%)',
-            }}
-          />
-          {/* Hot center glow */}
-          <div
-            className="absolute top-[32%] left-[52%] -translate-x-1/2 -translate-y-1/2 rounded-full"
-            style={{
-              width: '25%',
-              height: '30%',
-              background: 'radial-gradient(ellipse, rgba(180,160,255,0.2) 0%, transparent 70%)',
+              width: '50%',
+              height: '60%',
+              background: 'radial-gradient(ellipse, rgba(100,70,200,0.08) 0%, transparent 70%)',
             }}
           />
         </div>
