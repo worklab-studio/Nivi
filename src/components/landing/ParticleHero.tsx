@@ -167,10 +167,10 @@ export function ParticleHero() {
             float mouseDist = distance(position.xy, uMouse.xy);
             vGlow = smoothstep(2.0, 0.0, mouseDist);
 
-            // Very subtle breathing
-            pos.z += sin(uTime * 0.3 + position.x * 2.0 + position.y * 1.5) * 0.005;
-            pos.x += sin(uTime * 0.2 + position.y * 2.0) * 0.001;
-            pos.y += cos(uTime * 0.2 + position.x * 2.0) * 0.001;
+            // Subtle visible breathing
+            pos.z += sin(uTime * 0.5 + position.x * 2.5 + position.y * 2.0) * 0.012;
+            pos.x += sin(uTime * 0.35 + position.y * 3.0) * 0.002;
+            pos.y += cos(uTime * 0.3 + position.x * 3.0) * 0.002;
 
             vec4 mvPos = modelViewMatrix * vec4(pos, 1.0);
             gl_Position = projectionMatrix * mvPos;
