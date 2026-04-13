@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useEffect, useState, useCallback } from 'react'
+import { useRef, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { motion, useScroll, useTransform } from 'framer-motion'
 import * as THREE from 'three'
@@ -8,243 +8,262 @@ import * as THREE from 'three'
 export function ParticleHero() {
   const sectionRef = useRef<HTMLElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
-  const rendererRef = useRef<THREE.WebGLRenderer | null>(null)
-  const sceneRef = useRef<THREE.Scene | null>(null)
-  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null)
-  const pointsRef = useRef<THREE.Points | null>(null)
-  const mouseRef = useRef(new THREE.Vector2(-10, -10))
-  const animRef = useRef(0)
-  const [ready, setReady] = useState(false)
+  const mouseRef = useRef({ x: 0, y: 0 })
+  const [, setMounted] = useState(false)
 
   const { scrollYProgress } = useScroll({
     target: sectionRef,
     offset: ['start start', 'end start'],
   })
-
   const textOpacity = useTransform(scrollYProgress, [0, 0.25], [1, 0])
   const textY = useTransform(scrollYProgress, [0, 0.3], [0, -80])
 
-  // Mouse tracking
   useEffect(() => {
-    const onMouseMove = (e: MouseEvent) => {
-      const container = containerRef.current
-      if (!container) return
-      const rect = container.getBoundingClientRect()
-      mouseRef.current.x = ((e.clientX - rect.left) / rect.width) * 2 - 1
-      mouseRef.current.y = -((e.clientY - rect.top) / rect.height) * 2 + 1
-    }
-    const onMouseLeave = () => {
-      mouseRef.current.set(-10, -10)
-    }
-    const onTouchMove = (e: TouchEvent) => {
-      const container = containerRef.current
-      if (!container) return
-      const rect = container.getBoundingClientRect()
-      const t = e.touches[0]
-      mouseRef.current.x = ((t.clientX - rect.left) / rect.width) * 2 - 1
-      mouseRef.current.y = -((t.clientY - rect.top) / rect.height) * 2 + 1
-    }
-    const onTouchEnd = () => {
-      mouseRef.current.set(-10, -10)
-    }
-
-    window.addEventListener('mousemove', onMouseMove)
-    window.addEventListener('touchmove', onTouchMove, { passive: true })
-    window.addEventListener('touchend', onTouchEnd)
-    containerRef.current?.addEventListener('mouseleave', onMouseLeave)
-
-    return () => {
-      window.removeEventListener('mousemove', onMouseMove)
-      window.removeEventListener('touchmove', onTouchMove)
-      window.removeEventListener('touchend', onTouchEnd)
-    }
-  }, [])
-
-  // Three.js setup
-  const initScene = useCallback(() => {
     const container = containerRef.current
     if (!container) return
 
+    // ── Setup ──
     const w = container.clientWidth
     const h = container.clientHeight
-
-    // Renderer
     const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: false })
     renderer.setSize(w, h)
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     renderer.setClearColor(0x000000, 0)
     container.appendChild(renderer.domElement)
-    renderer.domElement.style.position = 'absolute'
-    renderer.domElement.style.inset = '0'
-    rendererRef.current = renderer
+    Object.assign(renderer.domElement.style, { position: 'absolute', inset: '0' })
 
-    // Scene
     const scene = new THREE.Scene()
-    sceneRef.current = scene
-
-    // Camera
     const camera = new THREE.PerspectiveCamera(50, w / h, 0.1, 100)
-    camera.position.z = 4
-    cameraRef.current = camera
+    camera.position.z = 5
 
-    // Load image and create particles
+    let points: THREE.Points | null = null
+    let mat: THREE.ShaderMaterial | null = null
+    const startTime = performance.now()
+    let animId = 0
+
+    // ── Mouse ──
+    const onMouseMove = (e: MouseEvent) => {
+      const rect = container.getBoundingClientRect()
+      mouseRef.current.x = ((e.clientX - rect.left) / rect.width) * 2 - 1
+      mouseRef.current.y = -((e.clientY - rect.top) / rect.height) * 2 + 1
+    }
+    const onMouseLeave = () => { mouseRef.current.x = 0; mouseRef.current.y = 0 }
+    const onTouchMove = (e: TouchEvent) => {
+      const rect = container.getBoundingClientRect()
+      const t = e.touches[0]
+      mouseRef.current.x = ((t.clientX - rect.left) / rect.width) * 2 - 1
+      mouseRef.current.y = -((t.clientY - rect.top) / rect.height) * 2 + 1
+    }
+    window.addEventListener('mousemove', onMouseMove)
+    container.addEventListener('mouseleave', onMouseLeave)
+    window.addEventListener('touchmove', onTouchMove, { passive: true })
+
+    // ── Load image → create particles ──
     const img = new Image()
     img.crossOrigin = 'anonymous'
     img.src = '/face-particles.jpg'
     img.onload = () => {
-      const canvas = document.createElement('canvas')
-      const size = 400
+      const c = document.createElement('canvas')
+      const sampleSize = 500
       const aspect = img.height / img.width
-      canvas.width = size
-      canvas.height = size * aspect
-      const ctx = canvas.getContext('2d')!
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+      c.width = sampleSize
+      c.height = sampleSize * aspect
+      const ctx = c.getContext('2d')!
+      ctx.drawImage(img, 0, 0, c.width, c.height)
+      const data = ctx.getImageData(0, 0, c.width, c.height)
 
       const isMobile = window.innerWidth < 768
       const step = isMobile ? 4 : 2
+
       const positions: number[] = []
+      const randomStarts: number[] = []
       const alphas: number[] = []
       const sizes: number[] = []
 
-      const imgW = canvas.width
-      const imgH = canvas.height
-      const scaleX = 5.0 // larger spread — fill viewport
-      const scaleY = scaleX * aspect
+      const imgW = c.width
+      const imgH = c.height
+      const spread = 4.5
+      const spreadY = spread * aspect
+
+      // Compute simple edge/gradient for depth
+      const getLum = (x: number, y: number) => {
+        if (x < 0 || x >= imgW || y < 0 || y >= imgH) return 0
+        const i = (y * imgW + x) * 4
+        return (data.data[i] + data.data[i + 1] + data.data[i + 2]) / 3
+      }
 
       for (let y = 0; y < imgH; y += step) {
         for (let x = 0; x < imgW; x += step) {
-          const i = (y * imgW + x) * 4
-          const r = imageData.data[i]
-          const g = imageData.data[i + 1]
-          const b = imageData.data[i + 2]
-          const lum = (r + g + b) / 3
+          const lum = getLum(x, y)
+          if (lum < 18) continue
 
-          if (lum > 20) {
-            const brightness = lum / 255
-            // Map to 3D coords centered at origin
-            const px = (x / imgW - 0.5) * scaleX
-            const py = -(y / imgH - 0.5) * scaleY
-            // Add subtle Z depth based on brightness (brighter = closer)
-            const pz = (brightness - 0.5) * 0.4 + (Math.random() - 0.5) * 0.1
+          const brightness = lum / 255
 
-            positions.push(px, py, pz)
-            alphas.push(brightness)
-            sizes.push(1.5 + brightness * 2.5)
-          }
+          // 3D position
+          const px = (x / imgW - 0.5) * spread
+          const py = -(y / imgH - 0.5) * spreadY
+
+          // Pseudo-3D depth:
+          // - brightness = closer (nose, forehead bright = forward)
+          // - edge gradient = contour depth
+          // - center bias = nose is closest
+          const gx = getLum(x + step, y) - getLum(x - step, y)
+          const gy = getLum(x, y + step) - getLum(x, y - step)
+          const gradient = Math.sqrt(gx * gx + gy * gy) / 255
+
+          const centerDist = Math.sqrt(
+            Math.pow((x / imgW - 0.5) * 2, 2) +
+            Math.pow((y / imgH - 0.45) * 2, 2) // slightly above center for nose
+          )
+          const centerBias = Math.max(0, 1 - centerDist) * 0.3
+
+          const pz = brightness * 0.6 - gradient * 0.3 + centerBias + (Math.random() - 0.5) * 0.12
+
+          positions.push(px, py, pz)
+          alphas.push(brightness)
+          sizes.push(1.0 + brightness * 2.0)
+
+          // Random start: spiral sphere
+          const theta = Math.random() * Math.PI * 2
+          const phi = Math.acos(2 * Math.random() - 1)
+          const r = 6 + Math.random() * 6
+          randomStarts.push(
+            r * Math.sin(phi) * Math.cos(theta),
+            r * Math.sin(phi) * Math.sin(theta),
+            r * Math.cos(phi)
+          )
         }
       }
 
-      const geometry = new THREE.BufferGeometry()
-      geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
-      geometry.setAttribute('aAlpha', new THREE.Float32BufferAttribute(alphas, 1))
-      geometry.setAttribute('aSize', new THREE.Float32BufferAttribute(sizes, 1))
+      const geo = new THREE.BufferGeometry()
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+      geo.setAttribute('aRandomStart', new THREE.Float32BufferAttribute(randomStarts, 3))
+      geo.setAttribute('aAlpha', new THREE.Float32BufferAttribute(alphas, 1))
+      geo.setAttribute('aSize', new THREE.Float32BufferAttribute(sizes, 1))
 
-      // Custom shader material
-      const material = new THREE.ShaderMaterial({
+      mat = new THREE.ShaderMaterial({
         transparent: true,
         depthWrite: false,
         blending: THREE.AdditiveBlending,
         uniforms: {
-          uMouse: { value: new THREE.Vector3(-10, -10, 0) },
-          uGlowRadius: { value: 1.2 },
           uTime: { value: 0 },
+          uFormProgress: { value: 0 },
           uScroll: { value: 0 },
+          uMouse: { value: new THREE.Vector3(0, 0, 0) },
           uPixelRatio: { value: Math.min(window.devicePixelRatio, 2) },
         },
-        vertexShader: `
+        vertexShader: /* glsl */ `
           attribute float aAlpha;
           attribute float aSize;
-          uniform vec3 uMouse;
-          uniform float uGlowRadius;
+          attribute vec3 aRandomStart;
+
           uniform float uTime;
+          uniform float uFormProgress;
           uniform float uScroll;
+          uniform vec3 uMouse;
           uniform float uPixelRatio;
+
           varying float vAlpha;
           varying float vGlow;
+          varying float vDepth;
 
           void main() {
-            vec3 pos = position;
+            // Entrance animation: cubic ease-out
+            float t = 1.0 - pow(1.0 - clamp(uFormProgress, 0.0, 1.0), 3.0);
+            vec3 pos = mix(aRandomStart, position, t);
 
-            // Subtle floating animation
-            pos.x += sin(uTime * 0.3 + position.y * 2.0) * 0.01;
-            pos.y += cos(uTime * 0.2 + position.x * 2.0) * 0.01;
+            // Wobble / breathing
+            pos.x += sin(uTime * 0.5 + position.y * 3.0) * 0.012;
+            pos.y += cos(uTime * 0.4 + position.x * 3.0) * 0.012;
+            pos.z += sin(uTime * 0.3 + position.x * position.y * 2.0) * 0.008;
 
             // Scroll zoom
             float zoom = 1.0 + uScroll * 3.0;
             pos *= zoom;
 
-            vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
-            gl_Position = projectionMatrix * mvPosition;
+            vec4 mvPos = modelViewMatrix * vec4(pos, 1.0);
+            gl_Position = projectionMatrix * mvPos;
 
-            // Mouse distance in world space
+            // Mouse glow in world space
             float dist = distance(pos.xy, uMouse.xy);
-            vGlow = smoothstep(uGlowRadius, 0.0, dist);
+            vGlow = smoothstep(1.8, 0.0, dist);
 
-            // Size: base + glow boost
-            float finalSize = aSize * (1.0 + vGlow * 2.0) * uPixelRatio;
-            gl_PointSize = finalSize * (1.0 / -mvPosition.z);
+            // Ambient pulse
+            float pulse = 0.5 + 0.5 * sin(uTime * 1.2 + position.x * 2.0 + position.y * 1.5);
 
-            // Alpha: dim base + bright glow
-            vAlpha = aAlpha * 0.15 + vGlow * 0.9;
-            vAlpha *= 1.0 - smoothstep(0.6, 1.0, uScroll); // fade on scroll
+            // Point size
+            float sz = aSize * (1.0 + vGlow * 3.0 + pulse * 0.2) * uPixelRatio;
+            gl_PointSize = sz * (1.0 / -mvPos.z);
+
+            // Alpha
+            vAlpha = (aAlpha * 0.18 + vGlow * 0.9 + pulse * 0.06) * t;
+            vAlpha *= 1.0 - smoothstep(0.55, 1.0, uScroll);
+
+            vDepth = position.z;
           }
         `,
-        fragmentShader: `
+        fragmentShader: /* glsl */ `
           varying float vAlpha;
           varying float vGlow;
+          varying float vDepth;
 
           void main() {
-            // Circular particle shape
             float d = length(gl_PointCoord - vec2(0.5));
             if (d > 0.5) discard;
 
-            // Soft edge
             float strength = 1.0 - smoothstep(0.0, 0.5, d);
             strength = pow(strength, 1.5);
 
-            // Color: cool lavender base, warm white on glow
-            vec3 baseColor = vec3(0.65, 0.6, 0.78);
-            vec3 glowColor = vec3(0.95, 0.92, 1.0);
-            vec3 color = mix(baseColor, glowColor, vGlow);
+            // Color: cool lavender base → bright white on glow
+            vec3 base = vec3(0.52, 0.47, 0.7);
+            vec3 bright = vec3(1.0, 0.97, 1.0);
+            vec3 color = mix(base, bright, vGlow);
+
+            // Depth tint: forward particles slightly brighter
+            color += vDepth * vec3(0.12, 0.1, 0.18);
 
             gl_FragColor = vec4(color, vAlpha * strength);
           }
         `,
       })
 
-      const points = new THREE.Points(geometry, material)
+      points = new THREE.Points(geo, mat)
       scene.add(points)
-      pointsRef.current = points
-
-      setReady(true)
-      animate()
+      setMounted(true)
     }
 
+    // ── Render loop ──
     function animate() {
-      if (!rendererRef.current || !sceneRef.current || !cameraRef.current) return
+      const elapsed = (performance.now() - startTime) / 1000
 
-      const material = pointsRef.current?.material as THREE.ShaderMaterial | undefined
-      if (material) {
-        material.uniforms.uTime.value = performance.now() * 0.001
+      if (mat) {
+        mat.uniforms.uTime.value = elapsed
+        mat.uniforms.uFormProgress.value = Math.min(1, elapsed / 2.5)
+        mat.uniforms.uScroll.value = scrollYProgress.get()
 
-        // Convert screen mouse to world space
+        // Mouse → world space
         const mouse3D = new THREE.Vector3(mouseRef.current.x, mouseRef.current.y, 0.5)
-        mouse3D.unproject(cameraRef.current!)
-        const dir = mouse3D.sub(cameraRef.current!.position).normalize()
-        const distance = -cameraRef.current!.position.z / dir.z
-        const worldMouse = cameraRef.current!.position.clone().add(dir.multiplyScalar(distance))
-        material.uniforms.uMouse.value.set(worldMouse.x, worldMouse.y, 0)
-
-        // Scroll progress
-        material.uniforms.uScroll.value = scrollYProgress.get()
+        mouse3D.unproject(camera)
+        const dir = mouse3D.sub(camera.position).normalize()
+        const dist = -camera.position.z / dir.z
+        const worldMouse = camera.position.clone().add(dir.multiplyScalar(dist))
+        mat.uniforms.uMouse.value.set(worldMouse.x, worldMouse.y, 0)
       }
 
-      rendererRef.current.render(sceneRef.current, cameraRef.current!)
-      animRef.current = requestAnimationFrame(animate)
-    }
+      // Head rotation following cursor (smooth lerp)
+      if (points) {
+        const targetRotY = mouseRef.current.x * 0.2
+        const targetRotX = -mouseRef.current.y * 0.12
+        points.rotation.y += (targetRotY - points.rotation.y) * 0.04
+        points.rotation.x += (targetRotX - points.rotation.x) * 0.04
+      }
 
-    // Resize handler
+      renderer.render(scene, camera)
+      animId = requestAnimationFrame(animate)
+    }
+    animate()
+
+    // ── Resize ──
     const onResize = () => {
       const w = container.clientWidth
       const h = container.clientHeight
@@ -255,17 +274,14 @@ export function ParticleHero() {
     window.addEventListener('resize', onResize)
 
     return () => {
-      cancelAnimationFrame(animRef.current)
+      cancelAnimationFrame(animId)
+      window.removeEventListener('mousemove', onMouseMove)
+      window.removeEventListener('touchmove', onTouchMove)
       window.removeEventListener('resize', onResize)
       renderer.dispose()
-      renderer.domElement.remove()
+      if (renderer.domElement.parentNode) renderer.domElement.remove()
     }
   }, [scrollYProgress])
-
-  useEffect(() => {
-    const cleanup = initScene()
-    return () => cleanup?.()
-  }, [initScene])
 
   return (
     <motion.section
@@ -274,52 +290,49 @@ export function ParticleHero() {
       style={{ height: '180vh' }}
     >
       <div className="sticky top-0 h-screen overflow-hidden">
-        {/* Three.js container */}
-        <div
-          ref={containerRef}
-          className="absolute inset-0"
-          style={{ cursor: 'none' }}
-        />
+        {/* Three.js canvas */}
+        <div ref={containerRef} className="absolute inset-0" />
 
-        {/* Cursor glow overlay (CSS, follows mouse for extra glow) */}
-        <div className="absolute inset-0 pointer-events-none" id="cursor-glow" />
+        {/* Ambient radial glow */}
+        <div className="absolute inset-0 pointer-events-none">
+          <div
+            className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full"
+            style={{
+              width: '50%',
+              height: '60%',
+              background: 'radial-gradient(ellipse, rgba(100,80,160,0.06) 0%, transparent 70%)',
+            }}
+          />
+        </div>
 
-        {/* Text overlay — bottom left */}
+        {/* Text — bottom left */}
         <motion.div
           className="absolute z-10 bottom-0 left-0 p-8 sm:p-12 lg:p-16 max-w-2xl"
           style={{ opacity: textOpacity, y: textY }}
         >
-          <p className="text-[11px] sm:text-xs text-[#888] uppercase tracking-[0.2em] font-medium mb-4">
+          <p className="text-[10px] sm:text-[11px] text-[#777] uppercase tracking-[0.25em] font-medium mb-4">
             Your LinkedIn personal branding strategist
           </p>
-
-          <h1 className="font-sans text-[48px] sm:text-[64px] lg:text-[80px] font-bold leading-[0.95] tracking-tight mb-6">
+          <h1 className="font-sans text-[44px] sm:text-[60px] lg:text-[76px] font-bold leading-[0.95] tracking-tight mb-6">
             Say hello
             <br />
-            <span className="italic font-light bg-gradient-to-r from-white via-[#c4b5fd] to-[#888] bg-clip-text text-transparent">
+            <span className="italic font-light bg-gradient-to-r from-white via-[#c4b5fd] to-[#a78bfa] bg-clip-text text-transparent">
               Nivi.
             </span>
           </h1>
-
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             <Link
               href="/sign-up"
-              className="bg-white text-black text-sm px-7 py-3 rounded-lg font-medium hover:bg-white/90 transition-all hover:shadow-[0_0_30px_rgba(255,255,255,0.12)]"
+              className="bg-white text-black text-[13px] px-6 py-2.5 rounded-lg font-medium hover:bg-white/90 transition-all hover:shadow-[0_0_24px_rgba(255,255,255,0.1)] flex items-center gap-1.5"
             >
-              Request Access
-            </Link>
-            <Link
-              href="#how"
-              className="border border-[#333] text-sm px-7 py-3 rounded-lg text-[#aaa] hover:text-white hover:border-[#555] transition-colors"
-            >
-              Learn more
+              Request Access <span className="text-[10px]">↗</span>
             </Link>
           </div>
         </motion.div>
 
         {/* Bottom fade */}
         <div
-          className="absolute bottom-0 left-0 right-0 h-40 pointer-events-none"
+          className="absolute bottom-0 left-0 right-0 h-32 pointer-events-none"
           style={{ background: 'linear-gradient(to top, #0a0a0a, transparent)' }}
         />
       </div>
