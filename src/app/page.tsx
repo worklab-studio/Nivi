@@ -191,108 +191,79 @@ export default async function LandingPage() {
 
       {/* ──── TWO WAYS TO WORK ──── */}
       <section className="border-t border-[#1a1a1a]">
-        <div className="max-w-6xl mx-auto px-8 py-24">
+        <div className="max-w-5xl mx-auto px-8 py-24">
           <p className="font-sans text-xs text-[#555] uppercase tracking-[0.2em] text-center mb-3">Two ways to work</p>
-          <h2 className="text-[32px] sm:text-[40px] font-bold text-center mb-16">Same brain. Your choice of interface.</h2>
+          <h2 className="text-[32px] sm:text-[40px] font-bold text-center mb-4">Same brain. Your choice.</h2>
+          <p className="text-[#777] text-center text-[15px] mb-14 max-w-lg mx-auto">Every preference, every memory, every voice trait — shared across both interfaces.</p>
 
-          {/* Dashboard */}
-          <div className="grid grid-cols-1 md:grid-cols-[1fr_1.2fr] gap-10 items-center mb-20">
-            <div>
-              <div className="inline-flex items-center gap-2 bg-[#1a1a1a] border border-[#252525] rounded-full px-3 py-1 mb-4">
-                <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                <span className="text-[11px] text-[#888] font-medium">Dashboard</span>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Dashboard card */}
+            <div className="bg-[#111] border border-[#222] rounded-2xl p-7 flex flex-col">
+              <div className="flex items-center justify-between mb-5">
+                <div className="flex items-center gap-2.5">
+                  <div className="size-9 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /></svg>
+                  </div>
+                  <div>
+                    <p className="text-[15px] font-semibold text-white">Dashboard</p>
+                    <p className="text-[11px] text-[#666]">For deep work</p>
+                  </div>
+                </div>
+                <span className="text-[10px] text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full font-medium">Full control</span>
               </div>
-              <h3 className="text-[24px] font-bold text-white mb-3">Deep work mode</h3>
-              <p className="text-[15px] text-[#888] leading-relaxed mb-6">
-                When you want full control — compose with the AI editor, drag posts across your calendar, analyze what&apos;s working, and build your brand identity.
-              </p>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2.5 flex-1">
                 {[
-                  'AI Post Composer',
-                  'Content Calendar',
-                  'Engagement Tools',
-                  'Inspiration Library',
-                  'Voice DNA Setup',
-                  'Analytics & Charts',
-                ].map((item) => (
-                  <div key={item} className="flex items-center gap-2 text-[13px] text-[#aaa]">
-                    <div className="w-1 h-1 rounded-full bg-blue-500 shrink-0" />
-                    {item}
+                  ['Compose', 'AI editor with inline rewrites, formatting, emoji picker'],
+                  ['Calendar', 'Drag-and-drop scheduling with 15-min snap zones'],
+                  ['Engage', 'Split-pane comment drafting on target accounts'],
+                  ['Inspire', 'Browse 100+ creators, remix posts in your voice'],
+                  ['Analyze', 'Impressions, engagement rate, hook performance'],
+                  ['Identity', 'Voice DNA, content pillars, brand story'],
+                ].map(([title, desc]) => (
+                  <div key={title} className="flex items-start gap-3 group">
+                    <div className="w-5 h-5 rounded bg-[#1a1a1a] border border-[#252525] flex items-center justify-center shrink-0 mt-0.5 group-hover:border-blue-500/40 transition-colors">
+                      <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                    </div>
+                    <div>
+                      <p className="text-[13px] text-white font-medium">{title}</p>
+                      <p className="text-[11px] text-[#666] leading-relaxed">{desc}</p>
+                    </div>
                   </div>
                 ))}
               </div>
             </div>
-            <div className="bg-[#111] border border-[#222] rounded-2xl p-6 relative overflow-hidden">
-              <div className="absolute top-0 left-0 right-0 h-8 bg-[#1a1a1a] border-b border-[#252525] flex items-center px-3 gap-1.5">
-                <div className="w-2.5 h-2.5 rounded-full bg-[#333]" />
-                <div className="w-2.5 h-2.5 rounded-full bg-[#333]" />
-                <div className="w-2.5 h-2.5 rounded-full bg-[#333]" />
-              </div>
-              <div className="mt-10 space-y-3">
-                <div className="h-3 bg-[#1a1a1a] rounded w-2/3" />
-                <div className="h-3 bg-[#1a1a1a] rounded w-full" />
-                <div className="h-3 bg-[#1a1a1a] rounded w-4/5" />
-                <div className="h-3 bg-[#1a1a1a] rounded w-3/5" />
-                <div className="mt-4 grid grid-cols-3 gap-2">
-                  <div className="h-16 bg-[#1a1a1a] rounded-lg" />
-                  <div className="h-16 bg-[#1a1a1a] rounded-lg" />
-                  <div className="h-16 bg-[#1a1a1a] rounded-lg" />
-                </div>
-                <div className="h-24 bg-[#1a1a1a] rounded-lg mt-2" />
-              </div>
-            </div>
-          </div>
 
-          {/* WhatsApp */}
-          <div className="grid grid-cols-1 md:grid-cols-[1.2fr_1fr] gap-10 items-center">
-            <div className="bg-[#111] border border-[#222] rounded-2xl p-6 order-2 md:order-1 max-w-sm mx-auto w-full">
-              <div className="flex items-center gap-2.5 mb-4 pb-3 border-b border-[#1e1e1e]">
-                <div className="w-8 h-8 rounded-full bg-[#22c55e] flex items-center justify-center">
-                  <span className="text-black text-xs font-bold">N</span>
-                </div>
-                <div>
-                  <p className="text-[13px] font-medium text-white">Nivi</p>
-                  <p className="text-[9px] text-[#666]">Online</p>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <div className="bg-[#1a1a1a] rounded-xl rounded-tl-sm p-3 max-w-[85%]">
-                  <p className="text-[12px] text-[#ccc] leading-relaxed">Your post is ready. Hook score: 9/10</p>
-                </div>
-                <div className="bg-[#1a1a1a] rounded-xl rounded-tl-sm p-3 max-w-[85%]">
-                  <p className="text-[12px] text-[#ddd] italic leading-relaxed">&ldquo;I almost quit my startup 3 months in...&rdquo;</p>
-                </div>
-                <div className="flex justify-end">
-                  <div className="bg-[#005c4b] rounded-xl rounded-tr-sm px-3 py-1.5">
-                    <p className="text-[12px] text-white font-medium">POST</p>
+            {/* WhatsApp card */}
+            <div className="bg-[#111] border border-[#222] rounded-2xl p-7 flex flex-col">
+              <div className="flex items-center justify-between mb-5">
+                <div className="flex items-center gap-2.5">
+                  <div className="size-9 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                  </div>
+                  <div>
+                    <p className="text-[15px] font-semibold text-white">WhatsApp</p>
+                    <p className="text-[11px] text-[#666]">For speed</p>
                   </div>
                 </div>
-                <div className="bg-[#1a1a1a] rounded-xl rounded-tl-sm p-3 max-w-[85%]">
-                  <p className="text-[12px] text-[#ccc]">Done! Live on LinkedIn 🚀</p>
-                </div>
+                <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full font-medium">Zero friction</span>
               </div>
-            </div>
-            <div className="order-1 md:order-2">
-              <div className="inline-flex items-center gap-2 bg-[#1a1a1a] border border-[#252525] rounded-full px-3 py-1 mb-4">
-                <div className="w-1.5 h-1.5 rounded-full bg-[#22c55e]" />
-                <span className="text-[11px] text-[#888] font-medium">WhatsApp</span>
-              </div>
-              <h3 className="text-[24px] font-bold text-white mb-3">Speed mode</h3>
-              <p className="text-[15px] text-[#888] leading-relaxed mb-6">
-                When you want zero friction — approve posts, give feedback, and manage your LinkedIn from the app you already use 50 times a day.
-              </p>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2.5 flex-1">
                 {[
-                  'One-word publishing',
-                  'Voice note → post',
-                  'Morning briefs',
-                  'Engagement alerts',
-                  'Edit conversationally',
-                  'Strategy advice',
-                ].map((item) => (
-                  <div key={item} className="flex items-center gap-2 text-[13px] text-[#aaa]">
-                    <div className="w-1 h-1 rounded-full bg-[#22c55e] shrink-0" />
-                    {item}
+                  ['Morning brief', 'Polished post draft delivered at 9 AM daily'],
+                  ['One-word publish', 'Reply POST and it&apos;s live on LinkedIn'],
+                  ['Edit by chat', '"Make it shorter" — Nivi rewrites instantly'],
+                  ['Engage', 'Comment opportunities with pre-drafted replies'],
+                  ['Voice notes', 'Record a thought, Nivi turns it into a post'],
+                  ['Strategy', 'Ask anything about your brand, audience, or content'],
+                ].map(([title, desc]) => (
+                  <div key={title} className="flex items-start gap-3 group">
+                    <div className="w-5 h-5 rounded bg-[#1a1a1a] border border-[#252525] flex items-center justify-center shrink-0 mt-0.5 group-hover:border-emerald-500/40 transition-colors">
+                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                    </div>
+                    <div>
+                      <p className="text-[13px] text-white font-medium">{title}</p>
+                      <p className="text-[11px] text-[#666] leading-relaxed">{desc}</p>
+                    </div>
                   </div>
                 ))}
               </div>
