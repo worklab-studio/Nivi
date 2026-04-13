@@ -6,6 +6,40 @@ export async function GET() {
   if (!userId) return Response.json({ error: 'Unauthorized' }, { status: 401 })
 
   const supabase = getSupabaseAdmin()
+
+  // Check if user has any opportunities
+  const { count: existingCount } = await supabase
+    .from('comment_opportunities')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', userId)
+
+  // Auto-populate from inspiration library if empty
+  if ((existingCount ?? 0) === 0) {
+    const { data: inspirationPosts } = await supabase
+      .from('inspiration_posts')
+      .select('id, content, author_name, author_headline, author_handle, author_avatar_url, linkedin_post_url, likes, comments')
+      .order('scraped_at', { ascending: false })
+      .limit(15)
+
+    if (inspirationPosts && inspirationPosts.length > 0) {
+      const rows = inspirationPosts.map((p) => ({
+        user_id: userId,
+        linkedin_post_id: p.linkedin_post_url ?? `insp-${p.id}`,
+        author_name: p.author_name,
+        author_headline: p.author_headline,
+        author_handle: p.author_handle,
+        author_avatar_url: p.author_avatar_url,
+        linkedin_post_url: p.linkedin_post_url,
+        post_preview: (p.content ?? '').slice(0, 500),
+        drafted_comment: null,
+        relevance_score: null,
+        matched_pillar: null,
+        status: 'pending',
+      }))
+      await supabase.from('comment_opportunities').insert(rows)
+    }
+  }
+
   const { data } = await supabase
     .from('comment_opportunities')
     .select('*')

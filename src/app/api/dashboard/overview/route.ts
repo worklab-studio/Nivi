@@ -40,36 +40,43 @@ export async function GET() {
     (p.post_analytics as unknown as Analytics) ?? {}
 
   const published = allPosts.filter((p) => p.status === 'published')
-  const thisWeekStart = startOfWeek(new Date(), { weekStartsOn: 1 })
-  const lastWeekStart = subWeeks(thisWeekStart, 1)
 
-  const thisWeekPosts = published.filter(
-    (p) => new Date(p.published_at!) >= thisWeekStart
+  // Last 7 days as primary KPI period
+  const now7d = new Date()
+  const sevenDaysAgo = subDays(now7d, 7)
+  const fourteenDaysAgo = subDays(now7d, 14)
+
+  const last7dPosts = published.filter(
+    (p) => new Date(p.published_at!) >= sevenDaysAgo
   )
-  const lastWeekPosts = published.filter(
+  const prev7dPosts = published.filter(
     (p) =>
-      new Date(p.published_at!) >= lastWeekStart &&
-      new Date(p.published_at!) < thisWeekStart
+      new Date(p.published_at!) >= fourteenDaysAgo &&
+      new Date(p.published_at!) < sevenDaysAgo
   )
+
+  // Also keep week start for the week strip
+  const thisWeekStart = startOfWeek(new Date(), { weekStartsOn: 1 })
 
   const sum = (arr: typeof allPosts, key: keyof Analytics) =>
     arr.reduce((s, p) => s + (Number(getAnalytics(p)[key]) || 0), 0)
   const delta = (curr: number, prev: number) =>
     prev === 0 ? 0 : Math.round(((curr - prev) / prev) * 100)
 
-  const twImpressions = sum(thisWeekPosts, 'impressions')
-  const lwImpressions = sum(lastWeekPosts, 'impressions')
-  const totalImpressions = sum(published, 'impressions')
-  const totalLikes = sum(published, 'likes')
-  const totalComments = sum(published, 'comments')
+  const last7dImpressions = sum(last7dPosts, 'impressions')
+  const prev7dImpressions = sum(prev7dPosts, 'impressions')
+  const last7dLikes = sum(last7dPosts, 'likes')
+  const prev7dLikes = sum(prev7dPosts, 'likes')
+  const last7dComments = sum(last7dPosts, 'comments')
+  const prev7dComments = sum(prev7dPosts, 'comments')
   const avgEngagement =
-    published.length > 0
+    last7dPosts.length > 0
       ? Math.round(
-          (published.reduce(
+          (last7dPosts.reduce(
             (s, p) => s + (getAnalytics(p).engagement_rate ?? 0),
             0
           ) /
-            published.length) *
+            last7dPosts.length) *
             10
         ) / 10
       : 0
@@ -324,18 +331,12 @@ export async function GET() {
     streakDays,
     postsThisWeek,
     metrics: {
-      impressions: totalImpressions,
-      impressionsDelta: delta(twImpressions, lwImpressions),
-      likes: totalLikes,
-      likesDelta: delta(
-        sum(thisWeekPosts, 'likes'),
-        sum(lastWeekPosts, 'likes')
-      ),
-      comments: totalComments,
-      commentsDelta: delta(
-        sum(thisWeekPosts, 'comments'),
-        sum(lastWeekPosts, 'comments')
-      ),
+      impressions: last7dImpressions,
+      impressionsDelta: delta(last7dImpressions, prev7dImpressions),
+      likes: last7dLikes,
+      likesDelta: delta(last7dLikes, prev7dLikes),
+      comments: last7dComments,
+      commentsDelta: delta(last7dComments, prev7dComments),
       engagementRate: avgEngagement,
       streak: user?.streak_count ?? 0,
       totalPublished: published.length,

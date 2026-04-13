@@ -427,9 +427,9 @@ export default function OverviewPage() {
       {/* ──── METRICS ──── */}
       {(() => {
         const cards = [
-          { icon: Eye, label: 'Impressions', value: data?.metrics.impressions ?? 0, fmtValue: fmtNum(data?.metrics.impressions ?? 0), delta: data?.metrics.impressionsDelta, hint: 'vs last week' },
-          { icon: Heart, label: 'Reactions', value: data?.metrics.likes ?? 0, fmtValue: fmtNum(data?.metrics.likes ?? 0), delta: data?.metrics.likesDelta, hint: 'vs last week' },
-          { icon: MessageCircle, label: 'Comments', value: data?.metrics.comments ?? 0, fmtValue: fmtNum(data?.metrics.comments ?? 0), delta: data?.metrics.commentsDelta, hint: 'vs last week' },
+          { icon: Eye, label: 'Impressions', value: data?.metrics.impressions ?? 0, fmtValue: fmtNum(data?.metrics.impressions ?? 0), delta: data?.metrics.impressionsDelta, hint: 'last 7 days' },
+          { icon: Heart, label: 'Reactions', value: data?.metrics.likes ?? 0, fmtValue: fmtNum(data?.metrics.likes ?? 0), delta: data?.metrics.likesDelta, hint: 'last 7 days' },
+          { icon: MessageCircle, label: 'Comments', value: data?.metrics.comments ?? 0, fmtValue: fmtNum(data?.metrics.comments ?? 0), delta: data?.metrics.commentsDelta, hint: 'last 7 days' },
           { icon: BarChart3, label: 'Engagement', value: data?.metrics.engagementRate ?? 0, fmtValue: `${data?.metrics.engagementRate ?? 0}%`, hint: 'avg rate' },
           { icon: FileText, label: 'Published', value: data?.metrics.totalPublished ?? 0, fmtValue: `${data?.metrics.totalPublished ?? 0}`, hint: 'total posts', alwaysShow: true },
         ]
