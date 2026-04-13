@@ -77,7 +77,7 @@ export function ParticleHero() {
       const data = ctx.getImageData(0, 0, c.width, c.height)
 
       const isMobile = window.innerWidth < 768
-      const step = isMobile ? 3 : 2  // dense but performant
+      const step = isMobile ? 3 : 1  // maximum density
 
       const positions: number[] = []
       const randomStarts: number[] = []
@@ -121,11 +121,11 @@ export function ParticleHero() {
           )
           const centerBias = Math.max(0, 1 - centerDist) * 0.3
 
-          const pz = brightness * 1.0 - gradient * 0.5 + centerBias + (Math.random() - 0.5) * 0.25
+          const pz = brightness * 1.5 - gradient * 0.7 + centerBias + (Math.random() - 0.5) * 0.3
 
           positions.push(px, py, pz)
           alphas.push(brightness)
-          sizes.push(2.5 + brightness * 3.5)  // bigger particles, brighter = bigger
+          sizes.push(1.5 + brightness * 2.0)  // small dense particles
 
           // Random start: spiral sphere
           const theta = Math.random() * Math.PI * 2
@@ -141,39 +141,39 @@ export function ParticleHero() {
 
       // ── Floating logo particles ──
       const logos = [
-        { text: 'in', x: -3.2, y: 0.8, scale: 0.8 },      // LinkedIn
-        { text: 'AI', x: 3.0, y: -0.5, scale: 0.7 },       // AI
-        { text: '◆', x: -2.8, y: -1.5, scale: 0.6 },       // Claude diamond
-        { text: '✦', x: 2.5, y: 1.5, scale: 0.55 },        // ChatGPT star
-        { text: '⚡', x: -1.8, y: 2.0, scale: 0.5 },       // AI spark
-        { text: '◈', x: 3.3, y: -1.8, scale: 0.5 },        // Extra
+        { text: 'in', x: -3.0, y: 0.6, scale: 1.0 },       // LinkedIn
+        { text: 'AI', x: 2.8, y: -0.3, scale: 0.9 },       // AI
+        { text: '◆', x: -2.5, y: -1.3, scale: 0.8 },       // Claude
+        { text: '✦', x: 2.3, y: 1.3, scale: 0.7 },         // ChatGPT
+        { text: '⚡', x: -1.5, y: 1.8, scale: 0.65 },      // Spark
+        { text: '◈', x: 3.0, y: -1.6, scale: 0.65 },       // Extra
       ]
 
       for (const logo of logos) {
         const lc = document.createElement('canvas')
-        lc.width = 80
-        lc.height = 80
+        lc.width = 120
+        lc.height = 120
         const lctx = lc.getContext('2d')!
         lctx.fillStyle = 'white'
-        lctx.font = `bold ${Math.floor(50 * logo.scale)}px Arial`
+        lctx.font = `bold ${Math.floor(80 * logo.scale)}px Arial`
         lctx.textAlign = 'center'
         lctx.textBaseline = 'middle'
-        lctx.fillText(logo.text, 40, 40)
+        lctx.fillText(logo.text, 60, 60)
 
-        const ld = lctx.getImageData(0, 0, 80, 80)
-        const logoStep = 2
-        for (let ly = 0; ly < 80; ly += logoStep) {
-          for (let lx = 0; lx < 80; lx += logoStep) {
-            const li = (ly * 80 + lx) * 4
-            if (ld.data[li] > 80) {
+        const ld = lctx.getImageData(0, 0, 120, 120)
+        const logoStep = 1  // max density for logos
+        for (let ly = 0; ly < 120; ly += logoStep) {
+          for (let lx = 0; lx < 120; lx += logoStep) {
+            const li = (ly * 120 + lx) * 4
+            if (ld.data[li] > 60) {
               const b = ld.data[li] / 255
-              const px = logo.x + (lx / 80 - 0.5) * logo.scale
-              const py = logo.y + -(ly / 80 - 0.5) * logo.scale
-              const pz = (Math.random() - 0.5) * 0.15
+              const px = logo.x + (lx / 120 - 0.5) * logo.scale
+              const py = logo.y + -(ly / 120 - 0.5) * logo.scale
+              const pz = (Math.random() - 0.5) * 0.2
 
               positions.push(px, py, pz)
-              alphas.push(b * 0.7)
-              sizes.push(1.5 + b * 1.5)
+              alphas.push(b * 0.8)
+              sizes.push(1.2 + b * 1.5)
 
               const theta = Math.random() * Math.PI * 2
               const phi = Math.acos(2 * Math.random() - 1)
@@ -377,27 +377,29 @@ export function ParticleHero() {
 
         {/* Text — bottom left */}
         <motion.div
-          className="absolute z-10 bottom-0 left-0 p-8 sm:p-12 lg:p-16 max-w-2xl"
+          className="absolute z-10 bottom-0 left-0 p-8 sm:p-12 lg:p-16"
           style={{ opacity: textOpacity }}
         >
-          <p className="text-[10px] sm:text-[11px] text-[#777] uppercase tracking-[0.25em] font-medium mb-4">
-            Your LinkedIn personal branding strategist
+          <p className="text-[10px] sm:text-[11px] text-[#666] uppercase tracking-[0.3em] font-medium mb-3">
+            Introducing
           </p>
-          <h1 className="font-sans text-[44px] sm:text-[60px] lg:text-[76px] font-bold leading-[0.95] tracking-tight mb-6">
-            Say hello
-            <br />
-            <span className="italic font-light bg-gradient-to-r from-white via-[#c4b5fd] to-[#a78bfa] bg-clip-text text-transparent">
+          <h1 className="font-sans mb-2">
+            <span className="text-[48px] sm:text-[64px] lg:text-[72px] font-bold tracking-tight text-white leading-none">
+              Introducing{' '}
+            </span>
+            <span className="text-[48px] sm:text-[64px] lg:text-[72px] italic font-light bg-gradient-to-r from-[#c4b5fd] to-[#a78bfa] bg-clip-text text-transparent leading-none">
               Nivi.
             </span>
           </h1>
-          <div className="flex items-center gap-3">
-            <Link
-              href="/sign-up"
-              className="bg-white text-black text-[13px] px-6 py-2.5 rounded-lg font-medium hover:bg-white/90 transition-all hover:shadow-[0_0_24px_rgba(255,255,255,0.1)] flex items-center gap-1.5"
-            >
-              Request Access <span className="text-[10px]">↗</span>
-            </Link>
-          </div>
+          <p className="text-[14px] sm:text-[16px] text-[#888] mb-6 max-w-md">
+            Your LinkedIn personal branding strategist.
+          </p>
+          <Link
+            href="/sign-up"
+            className="inline-flex items-center gap-2 bg-white text-black text-[13px] px-6 py-2.5 rounded-lg font-medium hover:bg-white/90 transition-all hover:shadow-[0_0_24px_rgba(255,255,255,0.1)]"
+          >
+            Request Access <span className="text-[11px]">↗</span>
+          </Link>
         </motion.div>
 
         {/* Bottom fade — adapts to scroll bg transition */}
