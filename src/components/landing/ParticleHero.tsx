@@ -4,6 +4,7 @@ import { useRef, useEffect } from 'react'
 import Link from 'next/link'
 import { motion, useScroll, useTransform } from 'framer-motion'
 import * as THREE from 'three'
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 
 export function ParticleHero() {
   const sectionRef = useRef<HTMLElement>(null)
@@ -62,62 +63,57 @@ export function ParticleHero() {
     container.addEventListener('mouseleave', onMouseLeave)
     window.addEventListener('touchmove', onTouchMove, { passive: true })
 
-    // Load raw position binary
-    fetch('/nivi-points.bin')
-      .then((res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        return res.arrayBuffer()
-      })
-      .then((buffer) => {
-        const float32 = new Float32Array(buffer)
-        const vertexCount = float32.length / 3
+    // Load GLB model
+    const loader = new GLTFLoader()
+    loader.load(
+      '/nivi-model.bin',
+      (gltf) => {
+        console.log('[ParticleHero] Model loaded')
 
-        console.log(`[ParticleHero] Loaded ${vertexCount} vertices`)
+        // Find mesh
+        let meshGeo: THREE.BufferGeometry | null = null
+        gltf.scene.traverse((child) => {
+          if (child instanceof THREE.Mesh && child.geometry && !meshGeo) {
+            meshGeo = child.geometry
+          }
+        })
+        if (!meshGeo) return
+
+        const posAttr = (meshGeo as THREE.BufferGeometry).attributes.position
+        if (!posAttr) return
+
+        ;(meshGeo as THREE.BufferGeometry).computeBoundingBox()
+        const box = (meshGeo as THREE.BufferGeometry).boundingBox!
+        const size = box.getSize(new THREE.Vector3())
+        const center = box.getCenter(new THREE.Vector3())
+        const maxDim = Math.max(size.x, size.y, size.z)
+        const scale = 3.8 / maxDim
 
         const isMobile = window.innerWidth < 768
-        const maxParticles = isMobile ? 40000 : 200000
-        const skip = Math.max(1, Math.floor(vertexCount / maxParticles))
+        const totalVerts = posAttr.count
+        const maxP = isMobile ? 40000 : 200000
+        const skip = Math.max(1, Math.floor(totalVerts / maxP))
+
+        console.log(`[ParticleHero] ${totalVerts} verts, using ${Math.floor(totalVerts / skip)} particles`)
 
         const positions: number[] = []
         const randomStarts: number[] = []
         const alphas: number[] = []
         const sizes: number[] = []
 
-        // Find bounds
-        let minX = Infinity, minY = Infinity, minZ = Infinity
-        let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity
-        for (let i = 0; i < float32.length; i += 3) {
-          minX = Math.min(minX, float32[i])
-          minY = Math.min(minY, float32[i + 1])
-          minZ = Math.min(minZ, float32[i + 2])
-          maxX = Math.max(maxX, float32[i])
-          maxY = Math.max(maxY, float32[i + 1])
-          maxZ = Math.max(maxZ, float32[i + 2])
-        }
-        const sizeX = maxX - minX
-        const sizeY = maxY - minY
-        const sizeZ = maxZ - minZ
-        const maxDim = Math.max(sizeX, sizeY, sizeZ)
-        const scale = 3.8 / maxDim
-        const cx = (minX + maxX) / 2
-        const cy = (minY + maxY) / 2
-        const cz = (minZ + maxZ) / 2
+        for (let i = 0; i < totalVerts; i += skip) {
+          const x = (posAttr.getX(i) - center.x) * scale
+          const y = (posAttr.getY(i) - center.y) * scale
+          const z = (posAttr.getZ(i) - center.z) * scale
 
-        for (let i = 0; i < vertexCount; i += skip) {
-          const x = (float32[i * 3] - cx) * scale
-          const y = (float32[i * 3 + 1] - cy) * scale
-          const z = (float32[i * 3 + 2] - cz) * scale
-
-          // Brightness from position
-          const ny = (float32[i * 3 + 1] - minY) / sizeY
-          const nz = (float32[i * 3 + 2] - minZ) / sizeZ
+          const ny = (posAttr.getY(i) - box.min.y) / size.y
+          const nz = (posAttr.getZ(i) - box.min.z) / size.z
           const brightness = 0.6 + ny * 0.25 + nz * 0.15
 
           positions.push(x, y, z)
           alphas.push(brightness)
-          sizes.push(1.2 + brightness * 1.8)
+          sizes.push(1.5 + brightness * 2.0)
 
-          // Random start
           const theta = Math.random() * Math.PI * 2
           const phi = Math.acos(2 * Math.random() - 1)
           const r = 6 + Math.random() * 5
@@ -127,8 +123,6 @@ export function ParticleHero() {
             r * Math.cos(phi)
           )
         }
-
-        console.log(`[ParticleHero] Using ${positions.length / 3} particles`)
 
         const geo = new THREE.BufferGeometry()
         geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
@@ -151,13 +145,11 @@ export function ParticleHero() {
             attribute float aAlpha;
             attribute float aSize;
             attribute vec3 aRandomStart;
-
             uniform float uTime;
             uniform float uFormProgress;
             uniform float uScroll;
             uniform vec3 uMouse;
             uniform float uPixelRatio;
-
             varying float vAlpha;
             varying float vGlow;
             varying float vDepth;
@@ -166,10 +158,8 @@ export function ParticleHero() {
               float t = 1.0 - pow(1.0 - clamp(uFormProgress, 0.0, 1.0), 3.0);
               vec3 pos = mix(aRandomStart, position, t);
 
-              // Subtle drift
-              float drift = uTime * 0.15;
-              pos.x += sin(drift + position.y * 3.0 + position.z * 2.0) * 0.005;
-              pos.y += cos(drift * 0.8 + position.x * 3.0 + position.z) * 0.005;
+              pos.x += sin(uTime * 0.15 + position.y * 3.0) * 0.005;
+              pos.y += cos(uTime * 0.12 + position.x * 3.0) * 0.005;
 
               vec4 mvPos = modelViewMatrix * vec4(pos, 1.0);
               gl_Position = projectionMatrix * mvPos;
@@ -187,7 +177,6 @@ export function ParticleHero() {
               vAlpha = (aAlpha * 1.4 + innerGlow * 0.5 + vGlow * 0.5 + scrollGlow) * t;
               vAlpha *= 1.0 - smoothstep(0.75, 1.0, uScroll);
               vAlpha = clamp(vAlpha, 0.0, 1.0);
-
               vDepth = position.z;
             }
           `,
@@ -200,7 +189,6 @@ export function ParticleHero() {
             void main() {
               float d = length(gl_PointCoord - vec2(0.5));
               if (d > 0.5) discard;
-
               float strength = 1.0 - smoothstep(0.0, 0.5, d);
               strength = pow(strength, 1.2);
 
@@ -213,7 +201,7 @@ export function ParticleHero() {
               color = mix(color, vec3(0.85, 0.78, 1.0), vGlow * 0.6);
 
               float scrollWhite = smoothstep(0.3, 0.65, uScroll);
-              color = mix(color, vec3(1.0, 0.98, 1.0), scrollWhite);
+              color = mix(color, vec3(1.0), scrollWhite);
               color += vDepth * vec3(0.05, 0.03, 0.1);
 
               gl_FragColor = vec4(color, vAlpha * strength);
@@ -223,10 +211,11 @@ export function ParticleHero() {
 
         points = new THREE.Points(geo, mat)
         scene.add(points)
-      })
-      .catch((err) => console.error('[ParticleHero] Load error:', err))
+      },
+      (p) => console.log(`[ParticleHero] Loading: ${Math.round((p.loaded / (p.total || 1)) * 100)}%`),
+      (err) => console.error('[ParticleHero] Error:', err)
+    )
 
-    // Render loop
     function animate() {
       const elapsed = (performance.now() - startTime) / 1000
       const scroll = scrollYProgress.get()
@@ -235,7 +224,6 @@ export function ParticleHero() {
         mat.uniforms.uTime.value = elapsed
         mat.uniforms.uFormProgress.value = Math.min(1, elapsed / 2.5)
         mat.uniforms.uScroll.value = scroll
-
         camera.position.z = Math.max(-0.5, initialCamZ - scroll * 6.0)
 
         const mouse3D = new THREE.Vector3(mouseRef.current.x, mouseRef.current.y, 0.5)
@@ -247,10 +235,8 @@ export function ParticleHero() {
       }
 
       if (points) {
-        const targetRotY = mouseRef.current.x * 0.2
-        const targetRotX = -mouseRef.current.y * 0.12
-        points.rotation.y += (targetRotY - points.rotation.y) * 0.04
-        points.rotation.x += (targetRotX - points.rotation.x) * 0.04
+        points.rotation.y += (mouseRef.current.x * 0.2 - points.rotation.y) * 0.04
+        points.rotation.x += (-mouseRef.current.y * 0.12 - points.rotation.x) * 0.04
       }
 
       renderer.render(scene, camera)
@@ -259,10 +245,10 @@ export function ParticleHero() {
     animate()
 
     const onResize = () => {
-      const w = container.clientWidth
-      const h = container.clientHeight
-      renderer.setSize(w, h)
-      camera.aspect = w / h
+      const nw = container.clientWidth
+      const nh = container.clientHeight
+      renderer.setSize(nw, nh)
+      camera.aspect = nw / nh
       camera.updateProjectionMatrix()
     }
     window.addEventListener('resize', onResize)
@@ -286,35 +272,13 @@ export function ParticleHero() {
       <div className="sticky top-0 h-screen overflow-hidden">
         <div ref={containerRef} className="absolute inset-0" />
 
-        {/* Purple backlight glow */}
         <div className="absolute inset-0 pointer-events-none">
-          <div
-            className="absolute top-[38%] left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full blur-3xl"
-            style={{
-              width: '70%',
-              height: '80%',
-              background: 'radial-gradient(ellipse, rgba(120,80,220,0.15) 0%, rgba(80,40,180,0.05) 40%, transparent 70%)',
-            }}
-          />
-          <div
-            className="absolute top-[35%] left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full blur-2xl"
-            style={{
-              width: '40%',
-              height: '50%',
-              background: 'radial-gradient(ellipse, rgba(140,100,255,0.2) 0%, rgba(100,60,200,0.08) 50%, transparent 75%)',
-            }}
-          />
-          <div
-            className="absolute top-[33%] left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full blur-xl"
-            style={{
-              width: '20%',
-              height: '25%',
-              background: 'radial-gradient(ellipse, rgba(160,130,255,0.15) 0%, transparent 65%)',
-            }}
-          />
+          <div className="absolute top-[38%] left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full blur-3xl"
+            style={{ width: '70%', height: '80%', background: 'radial-gradient(ellipse, rgba(120,80,220,0.15) 0%, rgba(80,40,180,0.05) 40%, transparent 70%)' }} />
+          <div className="absolute top-[35%] left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full blur-2xl"
+            style={{ width: '40%', height: '50%', background: 'radial-gradient(ellipse, rgba(140,100,255,0.2) 0%, rgba(100,60,200,0.08) 50%, transparent 75%)' }} />
         </div>
 
-        {/* Text */}
         <motion.div
           className="absolute z-10 left-0 right-0 px-6 sm:px-10 lg:px-16"
           style={{ bottom: 48, opacity: textOpacity }}
@@ -328,18 +292,14 @@ export function ParticleHero() {
           <p className="text-[14px] sm:text-[16px] text-[#777] mb-6 max-w-md leading-relaxed">
             She learns your voice, writes daily posts, and delivers them to your WhatsApp.
           </p>
-          <Link
-            href="/sign-up"
-            className="inline-flex items-center gap-2 bg-white text-black text-[13px] px-6 py-2.5 rounded-lg font-medium hover:bg-white/90 transition-all hover:shadow-[0_0_24px_rgba(255,255,255,0.1)]"
-          >
+          <Link href="/sign-up"
+            className="inline-flex items-center gap-2 bg-white text-black text-[13px] px-6 py-2.5 rounded-lg font-medium hover:bg-white/90 transition-all hover:shadow-[0_0_24px_rgba(255,255,255,0.1)]">
             Say Hello Nivi <span className="text-[11px]">↗</span>
           </Link>
         </motion.div>
 
-        <div
-          className="absolute bottom-0 left-0 right-0 h-32 pointer-events-none"
-          style={{ background: 'linear-gradient(to top, rgba(10,10,10,0.8), transparent)' }}
-        />
+        <div className="absolute bottom-0 left-0 right-0 h-32 pointer-events-none"
+          style={{ background: 'linear-gradient(to top, rgba(10,10,10,0.8), transparent)' }} />
       </div>
     </motion.section>
   )
