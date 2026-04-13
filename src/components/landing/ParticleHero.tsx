@@ -167,13 +167,10 @@ export function ParticleHero() {
             float mouseDist = distance(position.xy, uMouse.xy);
             vGlow = smoothstep(2.0, 0.0, mouseDist);
 
-            // Cursor wobble — stretchy in/out effect (not separation)
-            float cursorDist = distance(position.xy, uMouse.xy);
-            float cursorInfluence = smoothstep(1.5, 0.0, cursorDist);
-            // Push forward in Z (stretch toward viewer) + subtle XY wobble
-            pos.z += cursorInfluence * 0.2 * sin(uTime * 3.0 + position.x * 5.0);
-            pos.x += cursorInfluence * 0.015 * sin(uTime * 4.0 + position.y * 6.0);
-            pos.y += cursorInfluence * 0.015 * cos(uTime * 3.5 + position.x * 6.0);
+            // Global subtle breathing wobble — always active, no cursor dependency
+            pos.z += sin(uTime * 0.8 + position.x * 3.0 + position.y * 2.0) * 0.02;
+            pos.x += sin(uTime * 0.6 + position.y * 4.0) * 0.003;
+            pos.y += cos(uTime * 0.5 + position.x * 4.0) * 0.003;
 
             vec4 mvPos = modelViewMatrix * vec4(pos, 1.0);
             gl_Position = projectionMatrix * mvPos;
