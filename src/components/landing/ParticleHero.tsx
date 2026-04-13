@@ -44,7 +44,7 @@ export function ParticleHero() {
       const x = e.clientX - rect.left
       const y = e.clientY - rect.top
       glow.style.opacity = '1'
-      glow.style.background = `radial-gradient(600px circle at ${x}px ${y}px, rgba(140,100,255,0.15), transparent 60%)`
+      glow.style.background = `radial-gradient(500px circle at ${x}px ${y}px, rgba(160,120,255,0.25), rgba(100,60,220,0.08) 50%, transparent 70%)`
     }
 
     const onMouseLeave = () => {
@@ -78,7 +78,8 @@ export function ParticleHero() {
           <img
             src="/face-photo.png"
             alt=""
-            className="h-[90vh] w-auto max-w-none object-contain select-none pointer-events-none"
+            className="h-[95vh] w-auto max-w-none object-contain select-none pointer-events-none"
+            style={{ filter: 'brightness(1.4) contrast(1.2)' }}
             draggable={false}
           />
 
@@ -95,9 +96,17 @@ export function ParticleHero() {
           <div
             className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full blur-3xl"
             style={{
-              width: '50%',
-              height: '60%',
-              background: 'radial-gradient(ellipse, rgba(100,60,200,0.1) 0%, transparent 70%)',
+              width: '60%',
+              height: '70%',
+              background: 'radial-gradient(ellipse, rgba(100,60,220,0.18) 0%, rgba(80,40,180,0.06) 40%, transparent 70%)',
+            }}
+          />
+          <div
+            className="absolute top-[38%] left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full blur-2xl"
+            style={{
+              width: '30%',
+              height: '40%',
+              background: 'radial-gradient(ellipse, rgba(140,100,255,0.12) 0%, transparent 65%)',
             }}
           />
         </div>
