@@ -154,10 +154,12 @@ export async function POST(req: Request) {
     return Response.json({ ok: true })
   }
 
-  // Process async — return 200 immediately to Unipile
-  processMessage(user, chatId, text, isForwarded, messageType, attachments, messageId).catch((err) => {
-    console.error('[WA error]', err?.message ?? err)
-  })
+  // Process synchronously — Vercel kills async work after response
+  try {
+    await processMessage(user, chatId, text, isForwarded, messageType, attachments, messageId)
+  } catch (err) {
+    console.error('[WA error]', (err as Error)?.message ?? err)
+  }
 
   return Response.json({ ok: true })
 }
