@@ -94,15 +94,20 @@ export async function GET(req: Request) {
           console.log(`[poll-wa] ${phone}: "${msg.text.slice(0, 40)}"`)
 
           try {
-            await handleConversation(
+            console.log(`[poll-wa] calling handleConversation for ${phone}...`)
+            const resp = await handleConversation(
               user.id,
               { whatsapp_number: phone, name: user.name, chatId: chat.id },
               msg.text
             )
+            console.log(`[poll-wa] handleConversation returned status: ${resp?.status}`)
             totalProcessed++
             console.log(`[poll-wa] replied to ${phone}`)
           } catch (err) {
-            console.error('[poll-wa] error:', (err as Error).message?.slice(0, 100))
+            const errMsg = (err as Error).message ?? String(err)
+            const errStack = (err as Error).stack ?? ''
+            console.error('[poll-wa] handleConversation FAILED:', errMsg.slice(0, 200))
+            console.error('[poll-wa] stack:', errStack.slice(0, 300))
             try {
               await sendWhatsApp(phone, 'oops, something glitched. try again?', chat.id)
             } catch { /* ignore */ }
