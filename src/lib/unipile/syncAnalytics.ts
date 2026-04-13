@@ -81,28 +81,42 @@ export async function syncLinkedInAnalytics(
     let postId = existingByLiId.get(liPost.id) ?? existingByContent.get(contentKey)
 
     if (!postId) {
-      // Create a new post entry for this LinkedIn-only post
-      let pubDate = new Date().toISOString()
-      try {
-        const d = new Date(liPost.date)
-        if (!isNaN(d.getTime())) pubDate = d.toISOString()
-      } catch { /* use current date */ }
-
-      const { data: inserted } = await supabase
+      // Double-check: query DB directly to avoid race conditions
+      const { data: existCheck } = await supabase
         .from('posts')
-        .insert({
-          user_id: userId,
-          content: liPost.text,
-          linkedin_post_id: liPost.id,
-          status: 'published',
-          published_at: pubDate,
-        })
+        .select('id')
+        .eq('user_id', userId)
+        .ilike('content', contentKey.slice(0, 50) + '%')
+        .limit(1)
+
+      if (existCheck && existCheck.length > 0) {
+        postId = existCheck[0].id
+      } else {
+        // Create a new post entry for this LinkedIn-only post
+        let pubDate = new Date().toISOString()
+        try {
+          const d = new Date(liPost.date)
+          if (!isNaN(d.getTime())) pubDate = d.toISOString()
+        } catch { /* use current date */ }
+
+        const { data: inserted } = await supabase
+          .from('posts')
+          .insert({
+            user_id: userId,
+            content: liPost.text,
+            linkedin_post_id: liPost.id,
+            status: 'published',
+            published_at: pubDate,
+          })
         .select('id')
         .single()
 
-      if (inserted) {
-        postId = inserted.id
-        created++
+        if (inserted) {
+          postId = inserted.id
+          existingByLiId.set(liPost.id, postId!)
+          existingByContent.set(contentKey, postId!)
+          created++
+        }
       }
     } else {
       // Update linkedin_post_id if not set
