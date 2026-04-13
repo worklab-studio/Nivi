@@ -99,9 +99,11 @@ export function ParticleHero() {
       for (let y = 0; y < imgH; y += step) {
         for (let x = 0; x < imgW; x += step) {
           const lum = getLum(x, y)
-          if (lum < 10) continue
+          if (lum < 5) continue  // capture almost everything
 
           const brightness = lum / 255
+          // Boost dark areas so eyes/hair are visible
+          const boostedBrightness = Math.pow(brightness, 0.6)  // gamma boost — lifts darks
 
           // 3D position
           const px = (x / imgW - 0.5) * spread
@@ -124,8 +126,8 @@ export function ParticleHero() {
           const pz = brightness * 1.5 - gradient * 0.7 + centerBias + (Math.random() - 0.5) * 0.3
 
           positions.push(px, py, pz)
-          alphas.push(brightness)
-          sizes.push(1.5 + brightness * 2.0)  // small dense particles
+          alphas.push(boostedBrightness)
+          sizes.push(1.2 + boostedBrightness * 2.0)
 
           // Random start: spiral sphere
           const theta = Math.random() * Math.PI * 2
@@ -363,14 +365,24 @@ export function ParticleHero() {
         {/* Three.js canvas */}
         <div ref={containerRef} className="absolute inset-0" />
 
-        {/* Subtle backlight — soft blur, not solid */}
+        {/* LinkedIn blue backlight glow */}
         <div className="absolute inset-0 pointer-events-none">
+          {/* Outer soft blue */}
           <div
-            className="absolute top-[30%] left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full blur-3xl"
+            className="absolute top-[35%] left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full blur-3xl"
             style={{
-              width: '50%',
-              height: '60%',
-              background: 'radial-gradient(ellipse, rgba(100,70,200,0.08) 0%, transparent 70%)',
+              width: '55%',
+              height: '65%',
+              background: 'radial-gradient(ellipse, rgba(0,119,181,0.1) 0%, transparent 70%)',
+            }}
+          />
+          {/* Inner brighter blue */}
+          <div
+            className="absolute top-[32%] left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full blur-2xl"
+            style={{
+              width: '30%',
+              height: '40%',
+              background: 'radial-gradient(ellipse, rgba(0,119,181,0.08) 0%, transparent 65%)',
             }}
           />
         </div>
