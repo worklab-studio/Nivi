@@ -291,6 +291,27 @@ const NIVI_TOOLS: { name: string; description: string; input_schema: { type: 'ob
     },
   },
   {
+    name: 'schedule_post',
+    description: 'Schedule a LinkedIn post for a future date/time. Use when user says "schedule this for tomorrow 9am", "post this at 3pm", "schedule for Monday". Creates a draft and schedules it. If no time given, default to the user\'s posting_time setting.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        text: { type: 'string', description: 'Full post text to schedule' },
+        scheduled_at: { type: 'string', description: 'ISO 8601 datetime for when to publish (in user timezone)' },
+      },
+      required: ['text', 'scheduled_at'],
+    },
+  },
+  {
+    name: 'send_morning_brief',
+    description: 'Trigger sending the morning brief right now. Use when user says "send me my morning brief", "what should I post today", "give me today\'s post draft".',
+    input_schema: {
+      type: 'object' as const,
+      properties: {},
+      required: [],
+    },
+  },
+  {
     name: 'create_content_strategy',
     description: 'Create a personalized content strategy for a given period.',
     input_schema: {
@@ -1225,6 +1246,81 @@ You now have the full profile. Use this to rewrite their bio, headline, or About
         return `done. deleted the ${post.status} post: "${preview}${post.content && post.content.length > 60 ? '...' : ''}"`
       } catch (err) {
         return `failed to delete: ${err instanceof Error ? err.message : 'unknown error'}`
+      }
+    }
+
+    case 'schedule_post': {
+      const text = input.text as string
+      const scheduledAt = input.scheduled_at as string
+      if (!text) return 'i need the post text to schedule. what do you want to post?'
+      if (!scheduledAt) return 'when should i schedule it? give me a date and time.'
+
+      try {
+        // Create the post as draft
+        const { data: post } = await supabase
+          .from('posts')
+          .insert({
+            user_id: userId,
+            content: text,
+            status: 'scheduled',
+            scheduled_at: scheduledAt,
+          })
+          .select('id')
+          .single()
+
+        if (!post) return 'failed to create the post. try again?'
+
+        // Create scheduled_posts entry for the cron to pick up
+        await supabase.from('scheduled_posts').insert({
+          post_id: post.id,
+          user_id: userId,
+          scheduled_at: scheduledAt,
+          status: 'pending',
+        })
+
+        const date = new Date(scheduledAt)
+        const timeStr = date.toLocaleString('en-IN', {
+          weekday: 'short',
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          timeZone: 'Asia/Kolkata',
+        })
+
+        return `scheduled! your post will go live on ${timeStr}.\n\n"${text.slice(0, 80)}${text.length > 80 ? '...' : ''}"\n\nyou can edit or cancel it anytime from the calendar.`
+      } catch (err) {
+        return `failed to schedule: ${err instanceof Error ? err.message : 'unknown error'}`
+      }
+    }
+
+    case 'send_morning_brief': {
+      try {
+        // Get user's recent performance
+        const { data: recentPosts } = await supabase
+          .from('posts')
+          .select('content, hook_type, post_analytics(impressions, likes, comments)')
+          .eq('user_id', userId)
+          .eq('status', 'published')
+          .order('published_at', { ascending: false })
+          .limit(5)
+
+        // Get identity for voice context
+        const { data: identity } = await supabase
+          .from('brand_identity')
+          .select('content_pillars, identity_summary')
+          .eq('user_id', userId)
+          .maybeSingle()
+
+        const pillars = (identity?.content_pillars ?? []) as Array<{ name: string }>
+        const pillarNames = pillars.map((p) => p.name).join(', ') || 'not set'
+
+        const topPost = recentPosts?.[0]
+        const topPostPreview = topPost?.content?.slice(0, 60) ?? 'none yet'
+
+        return `here's your morning brief:\n\n📊 recent posts: ${recentPosts?.length ?? 0}\n🎯 pillars: ${pillarNames}\n🔝 latest: "${topPostPreview}"\n\nwant me to draft today's post? just tell me a topic or say "write something" and i'll create one based on your voice.`
+      } catch {
+        return 'i couldnt pull your stats right now. want me to draft a post anyway?'
       }
     }
 
