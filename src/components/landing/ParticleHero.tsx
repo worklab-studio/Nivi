@@ -121,7 +121,7 @@ export function ParticleHero() {
 
           positions.push(px, py, pz)
           alphas.push(brightness)
-          sizes.push(1.0 + brightness * 2.0)
+          sizes.push(3.0 + brightness * 4.0)
 
           // Random start: spiral sphere
           const theta = Math.random() * Math.PI * 2
@@ -144,7 +144,7 @@ export function ParticleHero() {
       mat = new THREE.ShaderMaterial({
         transparent: true,
         depthWrite: false,
-        blending: THREE.AdditiveBlending,
+        blending: THREE.NormalBlending,
         uniforms: {
           uTime: { value: 0 },
           uFormProgress: { value: 0 },
@@ -191,8 +191,8 @@ export function ParticleHero() {
             float sz = aSize * (1.0 + vGlow * 1.5) * uPixelRatio;
             gl_PointSize = sz * (1.0 / -mvPos.z);
 
-            // Alpha: ALWAYS VISIBLE (0.7 base) + extra glow
-            vAlpha = (aAlpha * 0.7 + vGlow * 0.3) * t;
+            // Alpha: ALWAYS VISIBLE (0.85 base) + extra glow
+            vAlpha = (aAlpha * 0.85 + vGlow * 0.15) * t;
             vAlpha *= 1.0 - smoothstep(0.55, 1.0, uScroll);
 
             vDepth = position.z;
@@ -210,9 +210,9 @@ export function ParticleHero() {
             float strength = 1.0 - smoothstep(0.0, 0.5, d);
             strength = pow(strength, 1.5);
 
-            // Color: cool lavender base → bright white on glow
-            vec3 base = vec3(0.52, 0.47, 0.7);
-            vec3 bright = vec3(1.0, 0.97, 1.0);
+            // Color: visible lavender base → bright white on glow
+            vec3 base = vec3(0.7, 0.65, 0.85);
+            vec3 bright = vec3(1.0, 0.98, 1.0);
             vec3 color = mix(base, bright, vGlow);
 
             // Depth tint: forward particles slightly brighter
