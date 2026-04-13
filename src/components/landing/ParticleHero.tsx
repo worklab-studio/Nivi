@@ -246,8 +246,8 @@ export function ParticleHero() {
       }
 
       if (points) {
-        points.rotation.y += (mouseRef.current.x * 0.25 - points.rotation.y) * 0.05
-        points.rotation.x += (-mouseRef.current.y * 0.15 - points.rotation.x) * 0.05
+        points.rotation.y += (mouseRef.current.x * 0.25 - points.rotation.y) * 0.03  // smooth left-right
+        points.rotation.x += (-mouseRef.current.y * 0.04 - points.rotation.x) * 0.03  // very subtle up-down
       }
 
       renderer.render(scene, camera)
