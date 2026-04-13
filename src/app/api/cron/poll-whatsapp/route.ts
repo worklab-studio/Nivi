@@ -1,12 +1,12 @@
 import { getSupabaseAdmin } from '@/lib/supabase/admin'
-import { handleConversation } from '@/lib/whatsapp/handlers/conversation'
 import { sendWhatsApp } from '@/lib/whatsapp/send'
+import { handleConversation } from '@/lib/whatsapp/handlers/conversation'
 
-export const maxDuration = 60
+export const maxDuration = 300 // 5 min on Pro plan
 
 /**
- * Polls Unipile for new WhatsApp messages every ~10 seconds.
- * Processes them directly (no webhook needed).
+ * Polls Unipile for new WhatsApp messages.
+ * Runs every minute via cron, polls 6 times internally (every ~9s).
  */
 export async function GET(req: Request) {
   const authHeader = req.headers.get('authorization')
@@ -17,148 +17,102 @@ export async function GET(req: Request) {
 
   const BASE_URL = process.env.UNIPILE_BASE_URL!
   const API_KEY = process.env.UNIPILE_API_KEY!
+  const headers = { 'X-API-KEY': API_KEY, accept: 'application/json' }
   const supabase = getSupabaseAdmin()
 
   // Get WhatsApp account ID
   let waAccountId: string | null = null
   try {
-    const res = await fetch(`${BASE_URL}/api/v1/accounts`, {
-      headers: { 'X-API-KEY': API_KEY, accept: 'application/json' },
-    })
+    const res = await fetch(`${BASE_URL}/api/v1/accounts`, { headers })
     const data = await res.json()
-    const wa = (data.items ?? []).find(
-      (a: { type: string }) => a.type === 'WHATSAPP'
-    )
+    const wa = (data.items ?? []).find((a: { type: string }) => a.type === 'WHATSAPP')
     waAccountId = wa?.id ?? null
   } catch {
-    return Response.json({ ok: false, error: 'Could not fetch accounts' })
+    return Response.json({ ok: false, error: 'accounts fetch failed' })
   }
+  if (!waAccountId) return Response.json({ ok: false, error: 'no wa account' })
 
-  if (!waAccountId) {
-    return Response.json({ ok: false, error: 'No WhatsApp account' })
-  }
+  // Track processed message IDs to avoid duplicates within this run
+  const processedIds = new Set<string>()
+  let totalProcessed = 0
 
-  // Get last poll timestamp from a simple key-value store
-  const { data: pollState } = await supabase
-    .from('user_memory')
-    .select('fact')
-    .eq('user_id', 'system')
-    .eq('category', 'poll_state')
-    .single()
-
-  const lastPollTime = pollState?.fact
-    ? new Date(pollState.fact).getTime()
-    : Date.now() - 60000 // default: last 60 seconds
-
-  let processed = 0
-  const newLastPoll = new Date().toISOString()
-
-  // Poll 6 times over ~60 seconds
   for (let poll = 0; poll < 6; poll++) {
-    if (poll > 0) {
-      await new Promise((r) => setTimeout(r, 9000))
-    }
+    if (poll > 0) await new Promise((r) => setTimeout(r, 9000))
 
     try {
       // Get recent chats
       const chatsRes = await fetch(
-        `${BASE_URL}/api/v1/chats?account_id=${waAccountId}&limit=5`,
-        { headers: { 'X-API-KEY': API_KEY, accept: 'application/json' } }
+        `${BASE_URL}/api/v1/chats?account_id=${waAccountId}&limit=10`,
+        { headers }
       )
-      const chatsData = await chatsRes.json()
-      const chats = chatsData.items ?? []
+      const chats = (await chatsRes.json()).items ?? []
 
       for (const chat of chats) {
+        // Extract phone from provider_id (e.g. "919729072096@s.whatsapp.net")
+        const providerId = (chat.provider_id ?? chat.attendee_provider_id ?? '') as string
+        const phone = providerId.replace(/@.*$/, '').replace(/^\+/, '')
+        if (!phone || phone.length < 10) continue
+
+        // Find user by phone
+        const { data: user } = await supabase
+          .from('users')
+          .select('id, name, whatsapp_number, plan, timezone, niche, streak_count, onboarding_complete')
+          .eq('whatsapp_number', phone)
+          .single()
+        if (!user) continue
+
+        // Get latest messages
         const msgRes = await fetch(
           `${BASE_URL}/api/v1/chats/${chat.id}/messages?account_id=${waAccountId}&limit=3`,
-          { headers: { 'X-API-KEY': API_KEY, accept: 'application/json' } }
+          { headers }
         )
-        const msgData = await msgRes.json()
-        const messages = msgData.items ?? []
+        const messages = (await msgRes.json()).items ?? []
 
         for (const msg of messages) {
           if (msg.is_sender) continue
           if (!msg.text || !msg.text.trim()) continue
 
-          // Check message timestamp — skip if older than last poll
-          const msgTime = msg.timestamp
-            ? new Date(msg.timestamp).getTime()
-            : msg.created_at
-              ? new Date(msg.created_at).getTime()
-              : 0
+          const msgId = msg.id ?? ''
+          if (processedIds.has(msgId)) continue
 
-          if (msgTime && msgTime < lastPollTime) continue
+          // Skip messages older than 2 minutes
+          const msgTime = msg.timestamp ? new Date(msg.timestamp).getTime() : 0
+          if (msgTime && msgTime < Date.now() - 120000) continue
 
-          // Get sender phone
-          const senderPhone =
-            msg.sender?.attendee_specifics?.phone_number ??
-            msg.sender?.attendee_public_identifier ??
-            ''
-          const from = senderPhone.replace(/^\+/, '').replace(/@.*$/, '')
-          if (!from) continue
-
-          // Find user
-          const { data: user } = await supabase
-            .from('users')
-            .select('id, name, whatsapp_number, plan, timezone, niche, streak_count, onboarding_complete')
-            .eq('whatsapp_number', from)
-            .single()
-
-          if (!user) continue
-
-          // Check if already processed (dedup by message content + time)
-          const msgId = msg.id ?? `poll-${msgTime}`
+          // Dedup: check if we already have this exact message in conversations
           const { data: existing } = await supabase
             .from('conversations')
             .select('id')
             .eq('user_id', user.id)
             .eq('role', 'user')
             .eq('content', msg.text)
-            .gte('created_at', new Date(Date.now() - 120000).toISOString())
+            .gte('created_at', new Date(Date.now() - 180000).toISOString())
             .limit(1)
-
           if (existing && existing.length > 0) continue
 
-          console.log(`[poll-wa] Processing: ${from} → "${msg.text.slice(0, 40)}"`)
+          processedIds.add(msgId)
+          console.log(`[poll-wa] ${phone}: "${msg.text.slice(0, 40)}"`)
 
-          // Process the message directly
           try {
             await handleConversation(
               user.id,
-              { whatsapp_number: from, name: user.name, chatId: chat.id },
+              { whatsapp_number: phone, name: user.name, chatId: chat.id },
               msg.text
             )
-            processed++
+            totalProcessed++
+            console.log(`[poll-wa] replied to ${phone}`)
           } catch (err) {
-            console.error('[poll-wa] handleConversation error:', (err as Error).message)
-            // Send a fallback reply
+            console.error('[poll-wa] error:', (err as Error).message?.slice(0, 100))
             try {
-              await sendWhatsApp(from, 'sorry, something glitched on my end. try again?', chat.id)
+              await sendWhatsApp(phone, 'oops, something glitched. try again?', chat.id)
             } catch { /* ignore */ }
           }
         }
       }
     } catch (err) {
-      console.error('[poll-wa] Poll error:', (err as Error).message)
+      console.error('[poll-wa] poll error:', (err as Error).message)
     }
   }
 
-  // Save last poll timestamp
-  try {
-    await supabase.from('user_memory').upsert({
-      user_id: 'system',
-      category: 'poll_state',
-      fact: newLastPoll,
-      source: 'system',
-    }, { onConflict: 'user_id,category' })
-  } catch {
-    await supabase.from('user_memory').insert({
-      user_id: 'system',
-      category: 'poll_state',
-      fact: newLastPoll,
-      source: 'system',
-    })
-  }
-
-  return Response.json({ ok: true, processed })
+  return Response.json({ ok: true, processed: totalProcessed })
 }
