@@ -86,7 +86,7 @@ export function ParticleHero() {
 
       const imgW = c.width
       const imgH = c.height
-      const spread = 3.0
+      const spread = 3.8
       const spreadY = spread * aspect
 
       // Compute simple edge/gradient for depth
