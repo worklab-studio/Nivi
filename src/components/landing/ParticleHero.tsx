@@ -135,6 +135,55 @@ export function ParticleHero() {
         }
       }
 
+      // ── Floating logo particles ──
+      const logos = [
+        { text: 'in', x: -3.2, y: 0.8, scale: 0.8 },      // LinkedIn
+        { text: 'AI', x: 3.0, y: -0.5, scale: 0.7 },       // AI
+        { text: '◆', x: -2.8, y: -1.5, scale: 0.6 },       // Claude diamond
+        { text: '✦', x: 2.5, y: 1.5, scale: 0.55 },        // ChatGPT star
+        { text: '⚡', x: -1.8, y: 2.0, scale: 0.5 },       // AI spark
+        { text: '◈', x: 3.3, y: -1.8, scale: 0.5 },        // Extra
+      ]
+
+      for (const logo of logos) {
+        const lc = document.createElement('canvas')
+        lc.width = 80
+        lc.height = 80
+        const lctx = lc.getContext('2d')!
+        lctx.fillStyle = 'white'
+        lctx.font = `bold ${Math.floor(50 * logo.scale)}px Arial`
+        lctx.textAlign = 'center'
+        lctx.textBaseline = 'middle'
+        lctx.fillText(logo.text, 40, 40)
+
+        const ld = lctx.getImageData(0, 0, 80, 80)
+        const logoStep = 2
+        for (let ly = 0; ly < 80; ly += logoStep) {
+          for (let lx = 0; lx < 80; lx += logoStep) {
+            const li = (ly * 80 + lx) * 4
+            if (ld.data[li] > 80) {
+              const b = ld.data[li] / 255
+              const px = logo.x + (lx / 80 - 0.5) * logo.scale
+              const py = logo.y + -(ly / 80 - 0.5) * logo.scale
+              const pz = (Math.random() - 0.5) * 0.15
+
+              positions.push(px, py, pz)
+              alphas.push(b * 0.7)
+              sizes.push(1.5 + b * 1.5)
+
+              const theta = Math.random() * Math.PI * 2
+              const phi = Math.acos(2 * Math.random() - 1)
+              const r = 8 + Math.random() * 5
+              randomStarts.push(
+                r * Math.sin(phi) * Math.cos(theta),
+                r * Math.sin(phi) * Math.sin(theta),
+                r * Math.cos(phi)
+              )
+            }
+          }
+        }
+      }
+
       const geo = new THREE.BufferGeometry()
       geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
       geo.setAttribute('aRandomStart', new THREE.Float32BufferAttribute(randomStarts, 3))
