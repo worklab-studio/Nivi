@@ -111,13 +111,16 @@ export function ParticleHero() {
           colors.push(r / 255, g / 255, b / 255)
           sizes.push(2.0 + brightness * 3.0) // bigger particles
 
-          const theta = Math.random() * Math.PI * 2
-          const phi = Math.acos(2 * Math.random() - 1)
-          const rad = 5 + Math.random() * 4
+          // DNA helix start: particles spiral from top-right
+          const t_dna = Math.random() // position along helix 0-1
+          const helixAngle = t_dna * Math.PI * 6 // 3 full rotations
+          const helixRadius = 1.5 + Math.random() * 1.5
+          const helixY = 4 - t_dna * 10 // top to bottom
+          const strand = Math.random() > 0.5 ? 1 : -1 // two strands
           randomStarts.push(
-            rad * Math.sin(phi) * Math.cos(theta),
-            rad * Math.sin(phi) * Math.sin(theta),
-            rad * Math.cos(phi)
+            3.0 + Math.cos(helixAngle) * helixRadius * strand + (Math.random() - 0.5) * 0.8,
+            helixY + (Math.random() - 0.5) * 0.5,
+            Math.sin(helixAngle) * helixRadius * strand + (Math.random() - 0.5) * 0.8
           )
         }
       }
@@ -237,7 +240,7 @@ export function ParticleHero() {
 
       if (mat) {
         mat.uniforms.uTime.value = elapsed
-        mat.uniforms.uFormProgress.value = Math.min(1, elapsed / 2.5)
+        mat.uniforms.uFormProgress.value = Math.min(1, elapsed / 3.5) // slower formation
         mat.uniforms.uScroll.value = scroll
         camera.position.z = Math.max(-0.5, initialCamZ - scroll * 5.5)
 
