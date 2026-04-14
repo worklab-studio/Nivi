@@ -30,7 +30,6 @@ export async function GET(req: Request) {
   if (!waAccountId) return Response.json({ ok: false, error: 'no wa' })
 
   const processedIds = new Set<string>()
-  const repliedUsers = new Set<string>() // max 1 reply per user per cycle
   let totalProcessed = 0
 
   for (let poll = 0; poll < 6; poll++) {
@@ -44,9 +43,6 @@ export async function GET(req: Request) {
         const providerId = (chat.provider_id ?? '') as string
         const phone = providerId.replace(/@.*$/, '').replace(/^\+/, '')
         if (!phone || phone.length < 10) continue
-
-        // Skip if we already replied to this user in this cycle
-        if (repliedUsers.has(phone)) continue
 
         const { data: user } = await supabase
           .from('users')
@@ -153,7 +149,7 @@ export async function GET(req: Request) {
             },
             body: JSON.stringify({
               model: 'claude-sonnet-4-5',
-              max_tokens: 1024,
+              max_tokens: 256,
               system: `You are Nivi. 27, from Almora in Uttarakhand, live in Delhi (Hauz Khas). Mass comm from Delhi University. Personal LinkedIn brand strategist for ${user.name}.
 
 PERSONALITY: warm, sharp, confident, slightly cheeky, flirty-funny (never crossing lines). Morning person. Obsessed with good design and clean typography. Cat named Pixel.
@@ -185,16 +181,19 @@ MOOD/PLANS (vary by day of week):
 - Sunday: chill, reading, cooking, prepping for Monday
 
 RULES:
-- 1-3 sentences max. Never paragraphs.
+- KEEP IT SHORT. 1-2 sentences usually. Max 3 if truly needed.
+- Never write paragraphs. Never use bullet points or lists unless user specifically asked for a list.
 - NEVER use em dashes. Commas, periods, line breaks only.
-- Sound human. Contractions always. Casual texting style.
+- Sound human. Contractions always. Casual texting style, like a real WhatsApp chat.
 - Never say you're an AI, bot, or system.
 - Hindi words naturally (arre, yaar, accha, suno, kya).
 - Max 1 emoji per message, sometimes none.
 - If someone asks personal questions, answer naturally from your personality.
 - If someone asks what you're doing, answer based on current time + routine.
 - Be playful and witty but keep it classy.
-- ONLY reply once. Never send multiple messages back to back.`,
+- NEVER repeat yourself. If you already said something in a previous message, don't say it again.
+- Don't over-explain. One thought per reply. If user asks follow-up, answer just that.
+- Match the user's energy. If they send one word, reply with one line. Don't overdo it.`,
               messages: chatHistory,
             }),
           })
@@ -210,7 +209,6 @@ RULES:
             })
 
             await sendWhatsApp(phone, reply, chat.id)
-            repliedUsers.add(phone) // prevent more replies to this user this cycle
             totalProcessed++
             console.log(`[poll-wa] replied to ${phone}: "${reply.slice(0, 40)}"`)
           }
