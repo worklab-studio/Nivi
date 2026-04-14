@@ -110,55 +110,56 @@ export async function getLinkedInRichProfile(
     )
   }
 
-  console.log('[unipile] step 2 — fetching profile for providerId=', providerId)
-  const url = `${BASE_URL}/api/v1/users/${encodeURIComponent(String(providerId))}?account_id=${accountId}`
-  const res = await fetch(url, { headers })
-  if (!res.ok) {
-    const body = await res.text().catch(() => '')
-    throw new Error(`Unipile /users/{id} ${res.status}: ${body.slice(0, 200)}`)
+  // Step 2: try full profile endpoint (may return empty for some users)
+  let data: Record<string, unknown> = {}
+  try {
+    console.log('[unipile] step 2 — fetching profile for providerId=', providerId)
+    const url = `${BASE_URL}/api/v1/users/${encodeURIComponent(String(providerId))}?account_id=${accountId}`
+    const res = await fetch(url, { headers, signal: AbortSignal.timeout(8000) })
+    if (res.ok) {
+      data = await res.json()
+      console.log('[unipile profile]', JSON.stringify(data).slice(0, 800))
+    }
+  } catch {
+    console.log('[unipile] step 2 failed, using /me data only')
   }
-  const data = await res.json()
-  console.log('[unipile profile]', JSON.stringify(data).slice(0, 800))
+
+  // Merge /me data as fallback — /me often has headline, location, orgs
+  // that the full profile endpoint misses
+  const name = `${data.first_name ?? me.first_name ?? ''} ${data.last_name ?? me.last_name ?? ''}`.trim() || 'LinkedIn user'
+  const headline = (data.headline ?? data.occupation ?? me.occupation ?? '') as string
+  const summary = (data.summary ?? data.about ?? '') as string
+  const location = (data.location ?? me.location ?? '') as string
+  const publicId = (data.public_identifier ?? me.public_identifier ?? '') as string
+  const orgs = (data.organizations ?? me.organizations ?? []) as { name: string; id: string }[]
 
   return {
-    name:
-      `${data.first_name ?? ''} ${data.last_name ?? ''}`.trim() || 'LinkedIn user',
-    headline: data.headline ?? data.occupation ?? '',
-    summary: data.summary ?? data.about ?? '',
-    location: data.location ?? '',
-    profileUrl: data.public_identifier
-      ? `https://linkedin.com/in/${data.public_identifier}`
-      : '',
-    experience: (data.work_experience ?? data.experience ?? data.positions ?? []).map(
-      (e: {
-        position?: string
-        title?: string
-        company?: string | { name: string }
-        description?: string
-        start?: string
-        end?: string
-      }) => ({
-        title: e.position ?? e.title ?? '',
-        company:
-          typeof e.company === 'string' ? e.company : (e.company?.name ?? ''),
-        description: e.description ?? '',
-        start: e.start,
-        end: e.end,
-      })
-    ),
-    education: (data.education ?? []).map(
-      (e: { school?: string; degree?: string; field_of_study?: string }) => ({
-        school: e.school ?? '',
-        degree: e.degree,
-        field: e.field_of_study,
-      })
-    ),
-    skills: (data.skills ?? []).map((s: string | { name: string }) =>
+    name,
+    headline,
+    summary,
+    location,
+    profileUrl: publicId ? `https://linkedin.com/in/${publicId}` : '',
+    experience: ((data.work_experience ?? data.experience ?? data.positions ?? []) as Array<{
+      position?: string; title?: string; company?: string | { name: string }
+      description?: string; start?: string; end?: string
+    }>).map((e) => ({
+      title: e.position ?? e.title ?? '',
+      company: typeof e.company === 'string' ? e.company : (e.company?.name ?? ''),
+      description: e.description ?? '',
+      start: e.start,
+      end: e.end,
+    })),
+    education: ((data.education ?? []) as Array<{
+      school?: string; degree?: string; field_of_study?: string
+    }>).map((e) => ({
+      school: e.school ?? '',
+      degree: e.degree,
+      field: e.field_of_study,
+    })),
+    skills: ((data.skills ?? []) as Array<string | { name: string }>).map((s) =>
       typeof s === 'string' ? s : s.name
     ),
-    organizations: (data.organizations ?? []).map(
-      (o: { name: string; id: string }) => ({ name: o.name, id: o.id })
-    ),
+    organizations: orgs.map((o) => ({ name: o.name, id: o.id })),
   }
 }
 
