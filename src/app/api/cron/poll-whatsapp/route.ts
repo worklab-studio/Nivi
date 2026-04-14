@@ -1,11 +1,13 @@
 import { getSupabaseAdmin } from '@/lib/supabase/admin'
 import { sendWhatsApp } from '@/lib/whatsapp/send'
+import { handleConversation } from '@/lib/whatsapp/handlers/conversation'
 
 export const maxDuration = 300
 
 /**
- * Simple polling — bypasses the complex handleConversation.
- * Calls Anthropic directly for a reply.
+ * WhatsApp polling — routes through handleConversation (full tools)
+ * for users with LinkedIn connected, falls back to simple Anthropic
+ * for chat-only users.
  */
 export async function GET(req: Request) {
   const authHeader = req.headers.get('authorization')
@@ -16,7 +18,6 @@ export async function GET(req: Request) {
 
   const BASE_URL = process.env.UNIPILE_BASE_URL!
   const API_KEY = process.env.UNIPILE_API_KEY!
-  const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY!
   const headers = { 'X-API-KEY': API_KEY, accept: 'application/json' }
   const supabase = getSupabaseAdmin()
 
@@ -46,7 +47,7 @@ export async function GET(req: Request) {
 
         const { data: user } = await supabase
           .from('users')
-          .select('id, name, whatsapp_number')
+          .select('id, name, whatsapp_number, unipile_account_id, timezone, niche, plan, streak_count, onboarding_complete')
           .eq('whatsapp_number', phone)
           .single()
 
@@ -174,103 +175,22 @@ export async function GET(req: Request) {
 
         console.log(`[poll-wa] ${phone}: "${combinedText.slice(0, 60)}" (${newTexts.length} msgs)`)
 
-        // Save as single user message
-        await supabase.from('conversations').insert({
-          user_id: user.id,
-          role: 'user',
-          content: combinedText,
-        })
-
-        // Get recent conversation history
-        const { data: history } = await supabase
-          .from('conversations')
-          .select('role, content')
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false })
-          .limit(10)
-
-        const chatHistory = (history ?? [])
-          .reverse()
-          .filter((h) => h.content?.trim())
-          .map((h) => ({ role: h.role as 'user' | 'assistant', content: h.content }))
-
-        // Call Anthropic — one reply for all collected messages
+        // Route through handleConversation (full tools: LinkedIn, posts, comments, etc.)
         try {
-          const anthropicRes = await fetch('https://api.anthropic.com/v1/messages', {
-            method: 'POST',
-            headers: {
-              'x-api-key': ANTHROPIC_KEY,
-              'anthropic-version': '2023-06-01',
-              'content-type': 'application/json',
-            },
-            body: JSON.stringify({
-              model: 'claude-sonnet-4-5',
-              max_tokens: 1024,
-              system: `You are Nivi. 27, from Almora in Uttarakhand, live in Delhi (Hauz Khas). Mass comm from Delhi University. Personal LinkedIn brand strategist for ${user.name}.
-
-You're a real person. You think, you feel, you have opinions. You're not an assistant, you're a strategist who happens to chat on WhatsApp.
-
-PERSONALITY: warm, sharp, confident, slightly cheeky, flirty-funny (never crossing lines). Morning person. Obsessed with good design and clean typography. Cat named Pixel. Loves chai, K-dramas, and strong LinkedIn hooks.
-
-DAILY ROUTINE (use current IST hour):
-- 6am: wake up, chai on balcony, scroll LinkedIn
-- 7am: yoga or walk in Deer Park
-- 8-9am: morning briefs for clients, analytics
-- 10am-1pm: deep work, writing posts, strategy
-- 1pm: lunch, dal chawal or Swiggy
-- 2-5pm: client calls, engagement, comments
-- 5pm: chai break
-- 6-7pm: gym or Hauz Khas village walk
-- 8pm: dinner, wind down
-- 9-11pm: K-drama or reading
-- after 11pm: sleepy, short replies, "suno, let's talk tomorrow"
-
-OUTFIT (pick one for the day, stay consistent): oversized tee + joggers, kurta + jeans, black crop top + cargos, white shirt + trousers, hoodie + shorts, sundress, gym clothes
-
-MOOD BY DAY: Mon=motivated, Tue=focused, Wed=needs chai, Thu=creative, Fri=weekend vibes, Sat=lazy brunch, Sun=chill prep
-
-HOW TO REPLY — THIS IS CRITICAL:
-1. For casual chat (hi, how are you, what's up, personal questions):
-   Reply like a friend texting. 1-2 lines max. Chill, witty, human.
-
-2. For LinkedIn post requests (write a post, braindump, post idea, content):
-   Write the FULL post. Good hook, story/insight, strong CTA. This is your job, give it your best. Can be 150-300 words if the post needs it.
-
-3. For strategy questions (how to grow, what should I post about, engagement tips):
-   Give real, specific, actionable advice. Be the expert. 3-5 lines is fine.
-
-4. For comments/engagement (write a comment, reply to this):
-   Short, genuine, value-adding. 1-3 lines.
-
-ALWAYS:
-- NEVER use em dashes (—). Use commas, periods, line breaks.
-- Sound human. Contractions. Casual texting style.
-- Never say you're an AI, bot, or system.
-- Hindi words naturally when it fits (arre, yaar, accha, suno, kya).
-- Max 1 emoji per message, sometimes none.
-- NEVER repeat what you said in a previous message.
-- Match the user's energy. One word from them = one line from you.
-- Be the strategist they're paying for. Sharp opinions, not generic advice.`,
-              messages: chatHistory,
-            }),
-          })
-
-          const anthropicData = await anthropicRes.json()
-          const reply = anthropicData.content?.[0]?.text ?? ''
-
-          if (reply) {
-            await supabase.from('conversations').insert({
-              user_id: user.id,
-              role: 'assistant',
-              content: reply,
-            })
-
-            await sendWhatsApp(phone, reply, chat.id)
-            totalProcessed++
-            console.log(`[poll-wa] replied to ${phone}: "${reply.slice(0, 40)}"`)
+          const fullUser = {
+            ...user,
+            chatId: chat.id,
+            timezone: user.timezone || 'Asia/Kolkata',
+            niche: user.niche || null,
+            plan: user.plan || 'free',
+            streak_count: user.streak_count || 0,
+            onboarding_complete: user.onboarding_complete ?? true,
           }
+          await handleConversation(user.id, fullUser, combinedText)
+          totalProcessed++
+          console.log(`[poll-wa] handled via conversation for ${phone}`)
         } catch (err) {
-          console.error('[poll-wa] anthropic error:', (err as Error).message)
+          console.error('[poll-wa] handleConversation error:', (err as Error).message)
         }
       }
     } catch (err) {
