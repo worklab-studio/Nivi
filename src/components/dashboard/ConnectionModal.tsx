@@ -43,6 +43,8 @@ export function ConnectionModal({
           if (d.connected) {
             setLiDone(true)
             onLinkedInConnected?.()
+            // Auto-generate pillars in background (identity import happens in callback)
+            fetch('/api/dashboard/writing-style/generate-pillars', { method: 'POST' }).catch(() => {})
           }
           setLiConnecting(false)
         }

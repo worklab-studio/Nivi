@@ -1,7 +1,7 @@
 import { auth, currentUser } from '@clerk/nextjs/server'
 import { getSupabaseAdmin } from '@/lib/supabase/admin'
 import { getCachedLinkedInProfile } from '@/lib/unipile/profile'
-import { getMyRecentPosts } from '@/lib/unipile/linkedin'
+// getMyRecentPosts removed — post dates now come from local DB (synced by cron)
 import { startOfWeek, startOfYear, subWeeks, format, subDays, eachDayOfInterval } from 'date-fns'
 
 export async function GET() {
@@ -94,53 +94,27 @@ export async function GET() {
   const yearEnd = new Date(new Date().getFullYear(), 11, 31)
   const yearDays = eachDayOfInterval({ start: yearStart, end: yearEnd })
 
-  // Fetch LinkedIn stats (followers, connections) + post history via Unipile 2-step
+  // Fetch LinkedIn stats (followers, connections) from Apify cache (fast)
+  // + post history dates from local DB (already synced by cron/callback)
   let linkedInPostDates: Set<string> = new Set()
   let followers = 0
   let connections = 0
   if (user?.unipile_account_id) {
+    // Get followers/connections from Apify cache (instant, no network call)
     try {
-      const BASE_URL = process.env.UNIPILE_BASE_URL!
-      const API_KEY = process.env.UNIPILE_API_KEY!
-      const headers = { 'X-API-KEY': API_KEY, accept: 'application/json' }
-
-      // Step 1: /me → provider_id
-      const meRes = await fetch(
-        `${BASE_URL}/api/v1/users/me?account_id=${user.unipile_account_id}`,
-        { headers, signal: AbortSignal.timeout(5000) }
-      )
-      if (meRes.ok) {
-        const me = await meRes.json()
-        const providerId = me.provider_id ?? me.id ?? me.public_identifier
-
-        if (providerId) {
-          // Step 2: /users/{providerId} → full profile with follower_count, connections_count
-          try {
-            const profileRes = await fetch(
-              `${BASE_URL}/api/v1/users/${encodeURIComponent(String(providerId))}?account_id=${user.unipile_account_id}`,
-              { headers, signal: AbortSignal.timeout(5000) }
-            )
-            if (profileRes.ok) {
-              const fullProfile = await profileRes.json()
-              followers = fullProfile.follower_count ?? 0
-              connections = fullProfile.connections_count ?? 0
-            }
-          } catch {
-            // Full profile fetch is best-effort
-          }
-
-          // Step 3: post history
-          const liPosts = await getMyRecentPosts(user.unipile_account_id, String(providerId), 100)
-          for (const p of liPosts) {
-            if (p.date) {
-              const d = format(new Date(p.date), 'yyyy-MM-dd')
-              linkedInPostDates.add(d)
-            }
-          }
-        }
+      const { getLinkedInProfileCached } = await import('@/lib/apify/scrapeLinkedInProfile')
+      const cached = await getLinkedInProfileCached(userId)
+      if (cached) {
+        followers = cached.followerCount ?? 0
+        connections = cached.connectionCount ?? 0
       }
-    } catch {
-      // LinkedIn history is best-effort
+    } catch { /* best effort */ }
+
+    // Get post dates from local DB (already synced)
+    for (const p of published) {
+      if (p.published_at) {
+        linkedInPostDates.add(format(new Date(p.published_at), 'yyyy-MM-dd'))
+      }
     }
   }
 

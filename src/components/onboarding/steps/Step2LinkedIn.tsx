@@ -39,7 +39,11 @@ export function Step2LinkedIn({ onNext, onBack }: Step2Props) {
           try {
             const r = await fetch('/api/onboarding/check-linkedin')
             const d = await r.json()
-            if (d.connected) setConnected(true)
+            if (d.connected) {
+              setConnected(true)
+              // Auto-generate pillars in background
+              fetch('/api/dashboard/writing-style/generate-pillars', { method: 'POST' }).catch(() => {})
+            }
           } catch {
             // polling failed, user can retry
           }
