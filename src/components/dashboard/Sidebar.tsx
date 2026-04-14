@@ -137,31 +137,33 @@ export function Sidebar() {
             <p className="text-[10px] text-muted-foreground mt-1">All features active</p>
           </div>
         ) : isTrial ? (
-          <div className="bg-amber-500/5 border border-amber-500/20 rounded-lg px-3 py-2.5">
-            <div className="flex items-center gap-2">
-              <Sparkles size={14} className="text-amber-500" />
-              <span className="text-[12px] font-semibold text-foreground">Free Trial</span>
+          <div className="bg-secondary border border-border rounded-lg px-3 py-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[12px] font-medium text-foreground">Free Trial</span>
+              <span className="text-[10px] text-muted-foreground">{plan.trialDaysLeft}d left</span>
             </div>
-            <p className="text-[10px] text-muted-foreground mt-1">
-              {plan.trialDaysLeft} day{plan.trialDaysLeft !== 1 ? 's' : ''} remaining
-            </p>
+            <div className="mt-2 h-1.5 bg-muted rounded-full overflow-hidden">
+              <div
+                className="h-full bg-primary rounded-full transition-all"
+                style={{ width: `${((7 - plan.trialDaysLeft) / 7) * 100}%` }}
+              />
+            </div>
             <Link
               href="/pricing"
-              className="mt-2 block text-center text-[11px] bg-primary text-primary-foreground rounded-md py-1.5 font-medium hover:opacity-90 transition-opacity"
+              className="mt-2.5 block text-center text-[11px] border border-border text-muted-foreground rounded-md py-1.5 font-medium hover:text-foreground hover:bg-accent transition-colors"
             >
               Upgrade
             </Link>
           </div>
         ) : isExpired ? (
-          <div className="bg-destructive/5 border border-destructive/20 rounded-lg px-3 py-2.5">
-            <div className="flex items-center gap-2">
-              <Sparkles size={14} className="text-destructive" />
-              <span className="text-[12px] font-semibold text-foreground">Trial Ended</span>
+          <div className="bg-secondary border border-border rounded-lg px-3 py-2.5">
+            <span className="text-[12px] font-medium text-foreground">Trial ended</span>
+            <div className="mt-2 h-1.5 bg-muted rounded-full overflow-hidden">
+              <div className="h-full bg-primary rounded-full w-full" />
             </div>
-            <p className="text-[10px] text-muted-foreground mt-1">Upgrade to continue</p>
             <Link
               href="/pricing"
-              className="mt-2 block text-center text-[11px] bg-primary text-primary-foreground rounded-md py-1.5 font-medium hover:opacity-90 transition-opacity"
+              className="mt-2.5 block text-center text-[11px] bg-primary text-primary-foreground rounded-md py-1.5 font-medium hover:opacity-90 transition-opacity"
             >
               Upgrade Now
             </Link>
