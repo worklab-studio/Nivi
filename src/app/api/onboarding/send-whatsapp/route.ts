@@ -32,13 +32,15 @@ export async function POST(req: Request) {
 
   // Send the verification message from Nivi
   try {
+    console.log('[send-whatsapp] sending verification to:', normalized, 'for user:', userId)
     await sendWhatsApp(
       normalized,
-      `Hey there, Nivi this side.\nYour LinkedIn brand strategist.\n\nWe're together for the next 7 days, till you hire me fulltime.\n\nText "ok" to connect.`
+      `hey, nivi here. your linkedin brand strategist.\n\nreply "ok" to connect your whatsapp.`
     )
+    console.log('[send-whatsapp] sent successfully to:', normalized)
     return Response.json({ ok: true })
   } catch (err) {
-    console.error('[send-whatsapp] failed:', err)
+    console.error('[send-whatsapp] failed for', normalized, ':', err)
     return Response.json({ error: 'Failed to send message' }, { status: 500 })
   }
 }
