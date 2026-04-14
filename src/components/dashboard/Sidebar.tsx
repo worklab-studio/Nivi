@@ -16,6 +16,7 @@ import {
   Settings,
   Crown,
   Sparkles,
+  MessageCircleHeart,
 } from 'lucide-react'
 
 const GROUPS: {
@@ -173,7 +174,16 @@ export function Sidebar() {
 
       {/* Bottom */}
       <div className="h-px bg-border" />
-      <div className="px-2 py-2">
+      <div className="px-2 py-2 space-y-0.5">
+        <a
+          href="https://hellonivi.featurebase.app/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-3 px-3 py-[6px] rounded-md text-[13px] transition-colors text-muted-foreground hover:bg-secondary hover:text-foreground border border-transparent"
+        >
+          <MessageCircleHeart size={18} strokeWidth={1.5} className="shrink-0" />
+          <span>Feedback</span>
+        </a>
         <Link
           href="/settings"
           className={`flex items-center gap-3 px-3 py-[6px] rounded-md text-[13px] transition-colors ${
