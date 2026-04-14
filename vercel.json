@@ -19,7 +19,7 @@
     },
     {
       "path": "/api/cron/poll-whatsapp",
-      "schedule": "* * * * *"
+      "schedule": "*/2 * * * *"
     },
     {
       "path": "/api/cron/nivi-outreach",

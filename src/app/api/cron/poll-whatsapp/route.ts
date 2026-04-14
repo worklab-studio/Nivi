@@ -174,20 +174,27 @@ export async function GET(req: Request) {
           ? newTexts[0]
           : newTexts.join('\n')
 
-        // Final dedup: check if this exact text was already saved to conversations
-        // in the last 2 minutes (catches overlapping cron invocations)
-        const { data: alreadyInConv } = await supabase
-          .from('conversations')
-          .select('id')
-          .eq('user_id', user.id)
-          .eq('role', 'user')
-          .eq('content', combinedText)
-          .gte('created_at', new Date(Date.now() - 120000).toISOString())
-          .limit(1)
-        if (alreadyInConv && alreadyInConv.length > 0) {
-          console.log(`[poll-wa] skipping duplicate conversation for ${phone}`)
+        // === ATOMIC LOCK: prevent overlapping cron invocations ===
+        // Try to claim this user by setting last_active_at to NOW.
+        // Only proceed if last_active_at was > 30s ago (meaning no other
+        // cron invocation is currently processing this user).
+        const { data: lockCheck } = await supabase
+          .from('users')
+          .select('last_active_at')
+          .eq('id', user.id)
+          .single()
+        const lastActive = lockCheck?.last_active_at
+          ? new Date(lockCheck.last_active_at).getTime()
+          : 0
+        if (Date.now() - lastActive < 30000) {
+          console.log(`[poll-wa] skipping ${phone} — another invocation is processing`)
           continue
         }
+        // Claim the lock
+        await supabase
+          .from('users')
+          .update({ last_active_at: new Date().toISOString() })
+          .eq('id', user.id)
 
         console.log(`[poll-wa] ${phone}: "${combinedText.slice(0, 60)}" (${newTexts.length} msgs)`)
 
