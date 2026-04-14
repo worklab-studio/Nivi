@@ -49,7 +49,63 @@ export async function GET(req: Request) {
           .select('id, name, whatsapp_number')
           .eq('whatsapp_number', phone)
           .single()
-        if (!user) continue
+
+        if (!user) {
+          // Check if this is a pending WhatsApp verification (user entered number, replied "ok")
+          const { data: pendingUser } = await supabase
+            .from('users')
+            .select('id, name')
+            .eq('pending_whatsapp', phone)
+            .single()
+
+          if (pendingUser) {
+            // Check latest message from them
+            const verifyRes = await fetch(
+              `${BASE_URL}/api/v1/chats/${chat.id}/messages?account_id=${waAccountId}&limit=1`,
+              { headers }
+            )
+            const verifyMsgs = (await verifyRes.json()).items ?? []
+            const latestMsg = verifyMsgs[0]
+            if (
+              latestMsg &&
+              !latestMsg.is_sender &&
+              latestMsg.text &&
+              ['yes', 'y', 'ok', 'okay', 'yep', 'sure', 'hi', 'hello', 'hey'].includes(
+                latestMsg.text.trim().toLowerCase()
+              )
+            ) {
+              // Dedup this verification
+              const vKey = `wa_verify_${pendingUser.id}`
+              const { data: alreadyDone } = await supabase
+                .from('user_memory')
+                .select('id')
+                .eq('user_id', pendingUser.id)
+                .eq('fact', vKey)
+                .eq('category', 'poll_dedup')
+                .limit(1)
+              if (!alreadyDone || alreadyDone.length === 0) {
+                await supabase.from('user_memory').insert({
+                  user_id: pendingUser.id,
+                  fact: vKey,
+                  category: 'poll_dedup',
+                  source: 'system',
+                })
+                // Connect the user
+                await supabase
+                  .from('users')
+                  .update({ whatsapp_number: phone, pending_whatsapp: null })
+                  .eq('id', pendingUser.id)
+                await sendWhatsApp(
+                  phone,
+                  `connected! hey ${pendingUser.name}, i'm nivi. your linkedin brand strategist.\n\njust text me anytime you need a post, comment, or anything linkedin.`
+                )
+                totalProcessed++
+                console.log(`[poll-wa] verified & connected ${phone} for ${pendingUser.name}`)
+              }
+            }
+          }
+          continue
+        }
 
         // Cooldown: skip if Nivi replied to this user in the last 60 seconds
         const { data: recentReply } = await supabase
