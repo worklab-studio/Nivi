@@ -16,9 +16,15 @@ export async function sendWhatsApp(
       return
     }
     console.log('[WA send] finding/creating chat for:', to)
-    chatId = await findOrCreateChat(accountId, to) ?? undefined
+    chatId = await findOrCreateChat(accountId, to, message) ?? undefined
     if (!chatId) {
       console.error('[WA send] Could not find or create chat for:', to)
+      return
+    }
+
+    // If chat was just created, the message was already sent in creation
+    if (chatId.startsWith('NEW:')) {
+      console.log('[WA send] message sent during chat creation for:', to)
       return
     }
   }
@@ -73,7 +79,8 @@ async function getWhatsAppAccountId(): Promise<string | null> {
 
 async function findOrCreateChat(
   accountId: string,
-  phoneNumber: string
+  phoneNumber: string,
+  messageText?: string
 ): Promise<string | null> {
   // Normalize: strip +, spaces, dashes
   const normalized = phoneNumber.replace(/[\s\-\+\(\)]/g, '')
@@ -97,7 +104,8 @@ async function findOrCreateChat(
     const data = await res.json()
     const chat = data.items?.find(
       (c: { provider_id?: string }) => {
-        const pid = (c.provider_id ?? '').replace(/[\+@\s].*/g, '').replace(/^\+/, '')
+        // Extract just the digits from provider_id (e.g. "919767562913@s.whatsapp.net" → "919767562913")
+        const pid = (c.provider_id ?? '').replace(/[^0-9]/g, '')
         return pid === normalized || pid.endsWith(normalized) || normalized.endsWith(pid)
       }
     )
@@ -124,7 +132,7 @@ async function findOrCreateChat(
         body: JSON.stringify({
           account_id: accountId,
           attendees_ids: [`${normalized}@s.whatsapp.net`],
-          text: ' ',
+          text: messageText?.trim() || ' ',
         }),
       }
     )
@@ -142,6 +150,10 @@ async function findOrCreateChat(
     const chatId = newChat.chat_id ?? newChat.id ?? null
     if (chatId) {
       chatIdCache.set(normalized, chatId)
+      // If we sent the actual message during creation, signal caller not to double-send
+      if (messageText && messageText.trim().length > 1) {
+        return `NEW:${chatId}`
+      }
       return chatId
     }
 
