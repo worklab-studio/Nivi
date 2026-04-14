@@ -33,8 +33,8 @@ export async function GET(req: Request) {
   const processedIds = new Set<string>()
   let totalProcessed = 0
 
-  for (let poll = 0; poll < 3; poll++) {
-    if (poll > 0) await new Promise((r) => setTimeout(r, 18000))
+  // Single poll per invocation — cron fires every 2 min, no overlap possible
+  for (let poll = 0; poll < 1; poll++) {
 
     try {
       const chatsRes = await fetch(`${BASE_URL}/api/v1/chats?account_id=${waAccountId}&limit=10`, { headers })
