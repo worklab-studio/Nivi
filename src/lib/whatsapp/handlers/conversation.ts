@@ -1160,57 +1160,33 @@ Tell the user: "found ${drafts.length} relevant posts about ${keywords}, drafted
     case 'get_my_linkedin_profile': {
       if (!accountId) return 'linkedin not connected — ask the user to connect in settings'
       try {
-        // Step 1: get provider_id from /me
-        const meRes = await fetch(
-          `${baseUrl}/api/v1/users/me?account_id=${accountId}`,
-          { headers: { 'X-API-KEY': apiKey, accept: 'application/json' } }
-        )
-        if (!meRes.ok) return `couldnt reach linkedin right now (${meRes.status})`
-        const me = await meRes.json()
-        const providerId = me.provider_id ?? me.id ?? me.public_identifier
-        const name = `${me.first_name ?? ''} ${me.last_name ?? ''}`.trim()
-        const headline = me.occupation ?? me.headline ?? ''
+        const { getLinkedInProfileCached } = await import('@/lib/apify/scrapeLinkedInProfile')
+        const profile = await getLinkedInProfileCached(userId)
 
-        // Step 2: try to get richer profile
-        let summary = ''
-        let experience = ''
-        let skills = ''
-        if (providerId) {
-          try {
-            const profRes = await fetch(
-              `${baseUrl}/api/v1/users/${encodeURIComponent(providerId)}?account_id=${accountId}`,
-              { headers: { 'X-API-KEY': apiKey, accept: 'application/json' }, signal: AbortSignal.timeout(10000) }
-            )
-            if (profRes.ok) {
-              const prof = await profRes.json()
-              summary = prof.summary ?? prof.about ?? ''
-              experience = (prof.work_experience ?? prof.experience ?? prof.positions ?? [])
-                .slice(0, 5)
-                .map((e: { position?: string; title?: string; company?: string | { name: string }; description?: string }) =>
-                  `${e.position ?? e.title ?? ''} at ${typeof e.company === 'string' ? e.company : (e.company?.name ?? '')}${e.description ? `: ${e.description.slice(0, 200)}` : ''}`
-                )
-                .join('\n')
-              skills = (prof.skills ?? [])
-                .slice(0, 15)
-                .map((s: string | { name: string }) => typeof s === 'string' ? s : s.name)
-                .join(', ')
-            }
-          } catch { /* continue with basic info */ }
-        }
+        if (!profile) return 'couldnt fetch your profile right now. try again in a bit?'
 
-        return `LINKEDIN PROFILE for ${name}:
-Headline: ${headline}
-Location: ${me.location ?? ''}
-Profile URL: https://linkedin.com/in/${me.public_identifier ?? ''}
+        const expBlock = profile.experience
+          .slice(0, 5)
+          .map((e) => `${e.title} at ${e.company}${e.description ? `: ${e.description.slice(0, 200)}` : ''}`)
+          .join('\n')
+
+        const skillsBlock = profile.skills.slice(0, 15).join(', ')
+
+        return `LINKEDIN PROFILE for ${profile.name}:
+Headline: ${profile.headline}
+Location: ${profile.location}
+Followers: ${profile.followerCount.toLocaleString()}
+Connections: ${profile.connectionCount.toLocaleString()}
+Profile URL: ${profile.profileUrl}
 
 ABOUT / BIO:
-${summary || '(no About section found — the user may need to paste it manually)'}
+${profile.summary || '(no About section)'}
 
 EXPERIENCE:
-${experience || '(not available)'}
+${expBlock || '(none listed)'}
 
 SKILLS:
-${skills || '(not available)'}
+${skillsBlock || '(none listed)'}
 
 You now have the full profile. Use this to rewrite their bio, headline, or About section in their voice.`
       } catch (err) {

@@ -61,7 +61,22 @@ export async function getCachedLinkedInProfile(
     }
   }
 
-  // Refresh from Unipile
+  // Try Apify cached profile (rich data including avatar)
+  try {
+    const { getLinkedInProfileCached } = await import('@/lib/apify/scrapeLinkedInProfile')
+    const profile = await getLinkedInProfileCached(userId)
+    if (profile) {
+      return {
+        name: profile.name,
+        headline: profile.headline,
+        avatarUrl: profile.avatarUrl,
+      }
+    }
+  } catch {
+    // Fall through to Unipile
+  }
+
+  // Fallback: Unipile /me
   try {
     const res = await fetch(
       `${getEnv('UNIPILE_BASE_URL')}/api/v1/users/me?account_id=${u.unipile_account_id}`,
@@ -79,26 +94,9 @@ export async function getCachedLinkedInProfile(
     const first = (profile.first_name ?? '').toString().trim()
     const last = (profile.last_name ?? '').toString().trim()
     const fullName = `${first} ${last}`.trim() || u.name || 'You'
-    const headline = (
-      profile.headline ??
-      profile.occupation ??
-      profile.title ??
-      profile.summary ??
-      ''
-    )
-      .toString()
-      .slice(0, 160)
-    const avatarUrl = (
-      profile.profile_picture_url_large ??
-      profile.profile_picture_url ??
-      profile.picture_url ??
-      profile.img_url ??
-      profile.display_picture_url ??
-      profile.image_url ??
-      ''
-    ).toString()
+    const headline = (profile.headline ?? profile.occupation ?? '').toString().slice(0, 160)
+    const avatarUrl = (profile.profile_picture_url ?? '').toString()
 
-    // Persist cache (best-effort)
     await supabase
       .from('users')
       .update({
@@ -111,8 +109,7 @@ export async function getCachedLinkedInProfile(
 
     return { name: fullName, headline, avatarUrl }
   } catch (err) {
-    console.error('[unipile/profile] fetch failed:', err)
-    // Fallback to whatever we have cached, then Clerk
+    console.error('[profile] fetch failed:', err)
     return {
       name: u.linkedin_display_name ?? u.name ?? 'You',
       headline: u.linkedin_headline ?? '',

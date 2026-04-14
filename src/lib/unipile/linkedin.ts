@@ -86,11 +86,8 @@ export interface LinkedInRichProfile {
 export async function getLinkedInRichProfile(
   accountId: string
 ): Promise<LinkedInRichProfile> {
-  // Two-step pattern that mirrors getMyRecentPosts (the existing working
-  // Unipile call in this file):
-  //   1. /me?account_id=... → provider_id (LinkedIn URN / public_identifier)
-  //   2. /users/{provider_id}?account_id=... → full profile body with summary
-  console.log('[unipile] step 1 — fetching /me for accountId=', accountId)
+  // Step 1: Get public_identifier from Unipile /me (fast, reliable)
+  console.log('[profile] step 1 — fetching /me for accountId=', accountId)
   const meRes = await fetch(
     `${BASE_URL}/api/v1/users/me?account_id=${accountId}`,
     { headers }
@@ -100,44 +97,51 @@ export async function getLinkedInRichProfile(
     throw new Error(`Unipile /me ${meRes.status}: ${body.slice(0, 200)}`)
   }
   const me = await meRes.json()
-  console.log('[unipile me]', JSON.stringify(me).slice(0, 500))
 
-  const providerId =
-    me.provider_id ?? me.id ?? me.public_identifier ?? me.member_id
-  if (!providerId) {
-    throw new Error(
-      `Unipile /me missing provider_id (got keys: ${Object.keys(me).join(', ')})`
-    )
-  }
+  const publicId = me.public_identifier as string | undefined
+  const meOrgs = (me.organizations ?? []) as { name: string; id: string }[]
 
-  // Step 2: try full profile endpoint (may return empty for some users)
-  let data: Record<string, unknown> = {}
-  try {
-    console.log('[unipile] step 2 — fetching profile for providerId=', providerId)
-    const url = `${BASE_URL}/api/v1/users/${encodeURIComponent(String(providerId))}?account_id=${accountId}`
-    const res = await fetch(url, { headers, signal: AbortSignal.timeout(8000) })
-    if (res.ok) {
-      data = await res.json()
-      console.log('[unipile profile]', JSON.stringify(data).slice(0, 800))
+  // Step 2: Try Apify scraper (rich data: summary, experience, education, skills)
+  if (publicId) {
+    try {
+      const { scrapeLinkedInProfile } = await import('@/lib/apify/scrapeLinkedInProfile')
+      const apify = await scrapeLinkedInProfile(publicId)
+      console.log('[profile] Apify success for', apify.name)
+      return {
+        name: apify.name,
+        headline: apify.headline,
+        summary: apify.summary,
+        location: apify.location,
+        profileUrl: apify.profileUrl,
+        experience: apify.experience,
+        education: apify.education,
+        skills: apify.skills,
+        organizations: apify.organizations.length > 0
+          ? apify.organizations.map((o) => ({ name: o.name, id: o.id ?? '' }))
+          : meOrgs.map((o) => ({ name: o.name, id: o.id })),
+      }
+    } catch (err) {
+      console.error('[profile] Apify failed, falling back to Unipile:', (err as Error).message)
     }
-  } catch {
-    console.log('[unipile] step 2 failed, using /me data only')
   }
 
-  // Merge /me data as fallback — /me often has headline, location, orgs
-  // that the full profile endpoint misses
-  const name = `${data.first_name ?? me.first_name ?? ''} ${data.last_name ?? me.last_name ?? ''}`.trim() || 'LinkedIn user'
-  const headline = (data.headline ?? data.occupation ?? me.occupation ?? '') as string
-  const summary = (data.summary ?? data.about ?? '') as string
-  const location = (data.location ?? me.location ?? '') as string
-  const publicId = (data.public_identifier ?? me.public_identifier ?? '') as string
-  const orgs = (data.organizations ?? me.organizations ?? []) as { name: string; id: string }[]
+  // Step 3: Fallback to Unipile /users/{providerId} (may return empty)
+  const providerId = me.provider_id ?? me.id ?? publicId ?? me.member_id
+  let data: Record<string, unknown> = {}
+  if (providerId) {
+    try {
+      const url = `${BASE_URL}/api/v1/users/${encodeURIComponent(String(providerId))}?account_id=${accountId}`
+      const res = await fetch(url, { headers, signal: AbortSignal.timeout(8000) })
+      if (res.ok) data = await res.json()
+    } catch { /* continue with /me data */ }
+  }
 
+  // Merge /me + /users data
   return {
-    name,
-    headline,
-    summary,
-    location,
+    name: `${data.first_name ?? me.first_name ?? ''} ${data.last_name ?? me.last_name ?? ''}`.trim() || 'LinkedIn user',
+    headline: (data.headline ?? data.occupation ?? me.occupation ?? '') as string,
+    summary: (data.summary ?? data.about ?? '') as string,
+    location: (data.location ?? me.location ?? '') as string,
     profileUrl: publicId ? `https://linkedin.com/in/${publicId}` : '',
     experience: ((data.work_experience ?? data.experience ?? data.positions ?? []) as Array<{
       position?: string; title?: string; company?: string | { name: string }
@@ -159,7 +163,7 @@ export async function getLinkedInRichProfile(
     skills: ((data.skills ?? []) as Array<string | { name: string }>).map((s) =>
       typeof s === 'string' ? s : s.name
     ),
-    organizations: orgs.map((o) => ({ name: o.name, id: o.id })),
+    organizations: meOrgs.map((o) => ({ name: o.name, id: o.id })),
   }
 }
 

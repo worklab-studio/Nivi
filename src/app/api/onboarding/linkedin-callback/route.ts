@@ -26,6 +26,20 @@ export async function GET(req: NextRequest) {
       })
       .eq('id', userId)
 
+    // Persist public_identifier for Apify (so future scrapes skip Unipile /me)
+    try {
+      const meRes = await fetch(
+        `${process.env.UNIPILE_BASE_URL}/api/v1/users/me?account_id=${accountId}`,
+        { headers: { 'X-API-KEY': process.env.UNIPILE_API_KEY!, accept: 'application/json' }, signal: AbortSignal.timeout(5000) }
+      )
+      if (meRes.ok) {
+        const me = await meRes.json()
+        if (me.public_identifier) {
+          await supabase.from('users').update({ linkedin_public_identifier: me.public_identifier }).eq('id', userId)
+        }
+      }
+    } catch { /* best effort */ }
+
     // Trigger immediate analytics sync + identity import so data shows from the start
     // Run both in parallel, don't block the popup close
     Promise.all([
