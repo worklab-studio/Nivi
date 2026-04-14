@@ -26,13 +26,34 @@ export async function GET(req: NextRequest) {
       })
       .eq('id', userId)
 
-    // Trigger immediate analytics sync so KPIs show from the start
-    try {
-      const { syncLinkedInAnalytics } = await import('@/lib/unipile/syncAnalytics')
-      await syncLinkedInAnalytics(userId)
-    } catch (err) {
-      console.error('[linkedin-callback] analytics sync failed:', (err as Error).message)
-    }
+    // Trigger immediate analytics sync + identity import so data shows from the start
+    // Run both in parallel, don't block the popup close
+    Promise.all([
+      import('@/lib/unipile/syncAnalytics')
+        .then(({ syncLinkedInAnalytics }) => syncLinkedInAnalytics(userId))
+        .then((r) => console.log(`[linkedin-callback] synced ${r.synced} posts`))
+        .catch((err) => console.error('[linkedin-callback] analytics sync failed:', (err as Error).message)),
+      import('@/lib/identity/extractFromLinkedIn')
+        .then(({ importFromLinkedIn }) => importFromLinkedIn(userId))
+        .then((suggestion) => {
+          // Auto-save the imported identity
+          const updates: Record<string, unknown> = {
+            user_id: userId,
+            linkedin_imported_at: new Date().toISOString(),
+          }
+          if (suggestion.about_you) updates.about_you = suggestion.about_you
+          if (suggestion.your_story) updates.your_story = suggestion.your_story
+          if (suggestion.target_audience_suggestions?.length) {
+            updates.target_audience = suggestion.target_audience_suggestions
+          }
+          if (suggestion.offer_suggestions?.length) {
+            updates.offers = suggestion.offer_suggestions
+          }
+          return supabase.from('brand_identity').upsert(updates)
+        })
+        .then(() => console.log('[linkedin-callback] identity imported'))
+        .catch((err) => console.error('[linkedin-callback] identity import failed:', (err as Error).message)),
+    ]).catch(() => {})
 
     // Log event for Nivi proactive outreach
     void supabase.from('user_events').insert({
