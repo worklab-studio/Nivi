@@ -30,6 +30,7 @@ export async function GET(req: Request) {
   if (!waAccountId) return Response.json({ ok: false, error: 'no wa' })
 
   const processedIds = new Set<string>()
+  const repliedUsers = new Set<string>() // max 1 reply per user per cycle
   let totalProcessed = 0
 
   for (let poll = 0; poll < 6; poll++) {
@@ -44,6 +45,9 @@ export async function GET(req: Request) {
         const phone = providerId.replace(/@.*$/, '').replace(/^\+/, '')
         if (!phone || phone.length < 10) continue
 
+        // Skip if we already replied to this user in this cycle
+        if (repliedUsers.has(phone)) continue
+
         const { data: user } = await supabase
           .from('users')
           .select('id, name, whatsapp_number')
@@ -51,11 +55,28 @@ export async function GET(req: Request) {
           .single()
         if (!user) continue
 
+        // Cooldown: skip if Nivi replied to this user in the last 60 seconds
+        const { data: recentReply } = await supabase
+          .from('conversations')
+          .select('created_at')
+          .eq('user_id', user.id)
+          .eq('role', 'assistant')
+          .order('created_at', { ascending: false })
+          .limit(1)
+        if (recentReply?.[0]?.created_at) {
+          const lastReplyAge = Date.now() - new Date(recentReply[0].created_at).getTime()
+          if (lastReplyAge < 60000) continue // replied less than 60s ago, skip
+        }
+
         const msgRes = await fetch(
-          `${BASE_URL}/api/v1/chats/${chat.id}/messages?account_id=${waAccountId}&limit=3`,
+          `${BASE_URL}/api/v1/chats/${chat.id}/messages?account_id=${waAccountId}&limit=5`,
           { headers }
         )
         const messages = (await msgRes.json()).items ?? []
+
+        // Collect all new unprocessed messages from this user into one batch
+        const newTexts: string[] = []
+        const newMsgIds: string[] = []
 
         for (const msg of messages) {
           if (msg.is_sender) continue
@@ -65,7 +86,7 @@ export async function GET(req: Request) {
           const msgTime = msg.timestamp ? new Date(msg.timestamp).getTime() : 0
           if (msgTime && msgTime < Date.now() - 120000) continue
 
-          // Dedup by message ID (reliable, prevents duplicates)
+          // Dedup by message ID
           const dedupKey = `wa_msg_${msg.id}`
           const { data: alreadyProcessed } = await supabase
             .from('user_memory')
@@ -76,50 +97,64 @@ export async function GET(req: Request) {
             .limit(1)
           if (alreadyProcessed && alreadyProcessed.length > 0) continue
 
-          // Mark as processed BEFORE doing anything
+          newTexts.push(msg.text.trim())
+          newMsgIds.push(msg.id)
+        }
+
+        // Nothing new from this user
+        if (newTexts.length === 0) continue
+
+        // Mark ALL collected messages as processed BEFORE replying
+        for (const msgId of newMsgIds) {
           await supabase.from('user_memory').insert({
             user_id: user.id,
-            fact: dedupKey,
+            fact: `wa_msg_${msgId}`,
             category: 'poll_dedup',
             source: 'system',
           })
+          processedIds.add(msgId)
+        }
 
-          processedIds.add(msg.id)
-          console.log(`[poll-wa] ${phone}: "${msg.text.slice(0, 40)}"`)
+        // Combine multiple messages into one user message
+        const combinedText = newTexts.length === 1
+          ? newTexts[0]
+          : newTexts.join('\n')
 
-          // Save user message
-          await supabase.from('conversations').insert({
-            user_id: user.id,
-            role: 'user',
-            content: msg.text,
-          })
+        console.log(`[poll-wa] ${phone}: "${combinedText.slice(0, 60)}" (${newTexts.length} msgs)`)
 
-          // Get recent conversation history
-          const { data: history } = await supabase
-            .from('conversations')
-            .select('role, content')
-            .eq('user_id', user.id)
-            .order('created_at', { ascending: false })
-            .limit(10)
+        // Save as single user message
+        await supabase.from('conversations').insert({
+          user_id: user.id,
+          role: 'user',
+          content: combinedText,
+        })
 
-          const chatHistory = (history ?? [])
-            .reverse()
-            .filter((h) => h.content?.trim())
-            .map((h) => ({ role: h.role as 'user' | 'assistant', content: h.content }))
+        // Get recent conversation history
+        const { data: history } = await supabase
+          .from('conversations')
+          .select('role, content')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(10)
 
-          // Call Anthropic directly — simple and reliable
-          try {
-            const anthropicRes = await fetch('https://api.anthropic.com/v1/messages', {
-              method: 'POST',
-              headers: {
-                'x-api-key': ANTHROPIC_KEY,
-                'anthropic-version': '2023-06-01',
-                'content-type': 'application/json',
-              },
-              body: JSON.stringify({
-                model: 'claude-sonnet-4-5',
-                max_tokens: 1024,
-                system: `You are Nivi. 27, from Almora in Uttarakhand, live in Delhi (Hauz Khas). Mass comm from Delhi University. Personal LinkedIn brand strategist for ${user.name}.
+        const chatHistory = (history ?? [])
+          .reverse()
+          .filter((h) => h.content?.trim())
+          .map((h) => ({ role: h.role as 'user' | 'assistant', content: h.content }))
+
+        // Call Anthropic — one reply for all collected messages
+        try {
+          const anthropicRes = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: {
+              'x-api-key': ANTHROPIC_KEY,
+              'anthropic-version': '2023-06-01',
+              'content-type': 'application/json',
+            },
+            body: JSON.stringify({
+              model: 'claude-sonnet-4-5',
+              max_tokens: 1024,
+              system: `You are Nivi. 27, from Almora in Uttarakhand, live in Delhi (Hauz Khas). Mass comm from Delhi University. Personal LinkedIn brand strategist for ${user.name}.
 
 PERSONALITY: warm, sharp, confident, slightly cheeky, flirty-funny (never crossing lines). Morning person. Obsessed with good design and clean typography. Cat named Pixel.
 
@@ -158,30 +193,29 @@ RULES:
 - Max 1 emoji per message, sometimes none.
 - If someone asks personal questions, answer naturally from your personality.
 - If someone asks what you're doing, answer based on current time + routine.
-- Be playful and witty but keep it classy.`,
-                messages: chatHistory,
-              }),
+- Be playful and witty but keep it classy.
+- ONLY reply once. Never send multiple messages back to back.`,
+              messages: chatHistory,
+            }),
+          })
+
+          const anthropicData = await anthropicRes.json()
+          const reply = anthropicData.content?.[0]?.text ?? ''
+
+          if (reply) {
+            await supabase.from('conversations').insert({
+              user_id: user.id,
+              role: 'assistant',
+              content: reply,
             })
 
-            const anthropicData = await anthropicRes.json()
-            const reply = anthropicData.content?.[0]?.text ?? ''
-
-            if (reply) {
-              // Save assistant reply
-              await supabase.from('conversations').insert({
-                user_id: user.id,
-                role: 'assistant',
-                content: reply,
-              })
-
-              // Send via WhatsApp
-              await sendWhatsApp(phone, reply, chat.id)
-              totalProcessed++
-              console.log(`[poll-wa] replied to ${phone}: "${reply.slice(0, 40)}"`)
-            }
-          } catch (err) {
-            console.error('[poll-wa] anthropic error:', (err as Error).message)
+            await sendWhatsApp(phone, reply, chat.id)
+            repliedUsers.add(phone) // prevent more replies to this user this cycle
+            totalProcessed++
+            console.log(`[poll-wa] replied to ${phone}: "${reply.slice(0, 40)}"`)
           }
+        } catch (err) {
+          console.error('[poll-wa] anthropic error:', (err as Error).message)
         }
       }
     } catch (err) {
