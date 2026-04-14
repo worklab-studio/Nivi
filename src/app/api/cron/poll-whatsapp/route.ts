@@ -33,8 +33,8 @@ export async function GET(req: Request) {
   const processedIds = new Set<string>()
   let totalProcessed = 0
 
-  for (let poll = 0; poll < 6; poll++) {
-    if (poll > 0) await new Promise((r) => setTimeout(r, 9000))
+  for (let poll = 0; poll < 3; poll++) {
+    if (poll > 0) await new Promise((r) => setTimeout(r, 18000))
 
     try {
       const chatsRes = await fetch(`${BASE_URL}/api/v1/chats?account_id=${waAccountId}&limit=10`, { headers })
@@ -108,7 +108,8 @@ export async function GET(req: Request) {
           continue
         }
 
-        // Cooldown: skip if Nivi replied to this user in the last 60 seconds
+        // Cooldown: skip if Nivi replied to this user in the last 2 minutes
+        // (prevents overlapping cron invocations from double-replying)
         const { data: recentReply } = await supabase
           .from('conversations')
           .select('created_at')
@@ -118,7 +119,7 @@ export async function GET(req: Request) {
           .limit(1)
         if (recentReply?.[0]?.created_at) {
           const lastReplyAge = Date.now() - new Date(recentReply[0].created_at).getTime()
-          if (lastReplyAge < 60000) continue // replied less than 60s ago, skip
+          if (lastReplyAge < 120000) continue // replied less than 2 min ago, skip
         }
 
         const msgRes = await fetch(
@@ -172,6 +173,21 @@ export async function GET(req: Request) {
         const combinedText = newTexts.length === 1
           ? newTexts[0]
           : newTexts.join('\n')
+
+        // Final dedup: check if this exact text was already saved to conversations
+        // in the last 2 minutes (catches overlapping cron invocations)
+        const { data: alreadyInConv } = await supabase
+          .from('conversations')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('role', 'user')
+          .eq('content', combinedText)
+          .gte('created_at', new Date(Date.now() - 120000).toISOString())
+          .limit(1)
+        if (alreadyInConv && alreadyInConv.length > 0) {
+          console.log(`[poll-wa] skipping duplicate conversation for ${phone}`)
+          continue
+        }
 
         console.log(`[poll-wa] ${phone}: "${combinedText.slice(0, 60)}" (${newTexts.length} msgs)`)
 
