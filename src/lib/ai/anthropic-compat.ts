@@ -117,20 +117,54 @@ function getAnthropic(): Anthropic_SDK {
   return cachedAnthropic
 }
 
+/** Strip broken Unicode surrogates that crash the Anthropic JSON parser */
+function sanitizeText(str: string): string {
+  // eslint-disable-next-line no-control-regex
+  return str.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '')
+}
+
+function sanitizeParams(params: CreateParams): CreateParams {
+  const clean = { ...params }
+
+  // Sanitize system prompt
+  if (typeof clean.system === 'string') {
+    clean.system = sanitizeText(clean.system)
+  } else if (Array.isArray(clean.system)) {
+    clean.system = clean.system.map((s) => ({ ...s, text: sanitizeText(s.text) }))
+  }
+
+  // Sanitize messages
+  clean.messages = clean.messages.map((m) => {
+    if (typeof m.content === 'string') {
+      return { ...m, content: sanitizeText(m.content) }
+    }
+    if (Array.isArray(m.content)) {
+      return {
+        ...m,
+        content: m.content.map((block) => {
+          if (block.type === 'text') return { ...block, text: sanitizeText((block as TextBlock).text) }
+          if (block.type === 'tool_result') return { ...block, content: sanitizeText((block as ToolResultBlock).content) }
+          return block
+        }),
+      }
+    }
+    return m
+  })
+
+  return clean
+}
+
 async function callAnthropic(params: CreateParams): Promise<CreateResponse> {
   const client = getAnthropic()
+  const sanitized = sanitizeParams(params)
 
-  // The real SDK expects system as either a string or an array of
-  // content blocks with optional cache_control — our shape matches.
-  // Messages with tool_use / tool_result blocks also match the SDK directly,
-  // so we can pass through. `metadata` is our sidecar — never forward it.
   const res = await client.messages.create({
-    model: params.model,
-    max_tokens: params.max_tokens,
-    temperature: params.temperature ?? 0.9,
-    system: params.system as never,
-    messages: params.messages as never,
-    tools: params.tools as never,
+    model: sanitized.model,
+    max_tokens: sanitized.max_tokens,
+    temperature: sanitized.temperature ?? 0.9,
+    system: sanitized.system as never,
+    messages: sanitized.messages as never,
+    tools: sanitized.tools as never,
   })
 
   // Normalize the SDK response into our internal ContentBlock shape.

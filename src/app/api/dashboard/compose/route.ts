@@ -83,9 +83,17 @@ export async function POST(req: Request) {
   } = body
   const supabase = getSupabaseAdmin()
 
+  // Strip broken Unicode surrogates that crash the Anthropic API
+  function sanitize(str: string): string {
+    // eslint-disable-next-line no-control-regex
+    return str.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '')
+  }
+
   // Build the system prompt with the user's message as the memory retrieval query
   // (same as WhatsApp — contextually retrieves relevant memories)
   const systemPrompt = await buildComposeSystemPrompt(userId, userMessage)
+  systemPrompt.static = sanitize(systemPrompt.static)
+  systemPrompt.dynamic = sanitize(systemPrompt.dynamic)
 
   // Build extra context from the chat panel menus
   const contextBlocks: string[] = []
@@ -161,15 +169,16 @@ CRITICAL RULES FOR SECTION EDIT:
     ? `\n\n=== ADDITIONAL CONTEXT (selected by user) ===\n${contextBlocks.join('\n\n')}`
     : ''
 
-  const dynamicWithDraft = `${systemPrompt.dynamic}${sectionInstruction}${extraContext}
+  const dynamicWithDraft = sanitize(`${systemPrompt.dynamic}${sectionInstruction}${extraContext}
 
 === CURRENT DRAFT (the post you're iterating on — may be empty on the first turn) ===
-${currentDraft || '(no draft yet — this is the first turn)'}`
+${currentDraft || '(no draft yet — this is the first turn)'}`)
+
 
   // Build the messages array: prior chat history + the new user message
   const fullMessages = [
-    ...messages.map((m) => ({ role: m.role, content: m.content })),
-    { role: 'user' as const, content: userMessage },
+    ...messages.map((m) => ({ role: m.role, content: sanitize(m.content) })),
+    { role: 'user' as const, content: sanitize(userMessage) },
   ]
 
   let response
