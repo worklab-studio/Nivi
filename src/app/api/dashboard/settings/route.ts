@@ -32,12 +32,12 @@ export async function PATCH(req: Request) {
   await supabase.from('users').update(updates).eq('id', userId)
 
   // Log event for Nivi proactive outreach
-  supabase.from('user_events').insert({
+  void supabase.from('user_events').insert({
     user_id: userId,
     event_type: 'settings_changed',
     metadata: { fields: Object.keys(updates) },
-  }).then(() => {}).catch(() => {})
-  supabase.from('users').update({ last_active_at: new Date().toISOString() }).eq('id', userId).then(() => {}).catch(() => {})
+  })
+  void supabase.from('users').update({ last_active_at: new Date().toISOString() }).eq('id', userId)
 
   return Response.json({ success: true })
 }
