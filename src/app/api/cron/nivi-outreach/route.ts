@@ -187,23 +187,38 @@ async function evaluateTriggers(
     }
   }
 
-  // P3: Engagement check
-  const { data: lastEngagement } = await supabase
-    .from('comment_opportunities')
-    .select('created_at')
-    .eq('user_id', user.id)
-    .eq('status', 'posted')
-    .order('created_at', { ascending: false })
-    .limit(1)
+  // P3: Engagement check — look at both comment_opportunities AND nivi_comments
+  const [{ data: lastOpp }, { data: lastComment }] = await Promise.all([
+    supabase
+      .from('comment_opportunities')
+      .select('created_at')
+      .eq('user_id', user.id)
+      .eq('status', 'posted')
+      .order('created_at', { ascending: false })
+      .limit(1),
+    supabase
+      .from('nivi_comments')
+      .select('created_at')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(1),
+  ])
 
-  const daysSinceEngagement = lastEngagement?.[0]?.created_at
-    ? (now.getTime() - new Date(lastEngagement[0].created_at).getTime()) / 86400000
-    : 999
+  // Use the most recent engagement from either source
+  const lastEngagementDate = [lastOpp?.[0]?.created_at, lastComment?.[0]?.created_at]
+    .filter(Boolean)
+    .map((d) => new Date(d!).getTime())
+    .sort((a, b) => b - a)[0]
 
-  if (daysSinceEngagement > 3) {
-    return {
-      type: 'engagement_nudge',
-      context: `${user.name} hasn't engaged (commented/liked) on LinkedIn in ${Math.floor(daysSinceEngagement)} days. Engagement is critical for growth. Their niche is ${user.niche || 'not set'}.`,
+  // Only nudge if we actually have engagement history AND it's stale
+  // If no history at all, skip — we can't claim they haven't engaged
+  if (lastEngagementDate) {
+    const daysSinceEngagement = (now.getTime() - lastEngagementDate) / 86400000
+    if (daysSinceEngagement > 3) {
+      return {
+        type: 'engagement_nudge',
+        context: `${user.name} hasn't engaged via Nivi in ${Math.floor(daysSinceEngagement)} days. They may be engaging directly on LinkedIn, but nudge them gently to use Nivi for strategic engagement. Their niche is ${user.niche || 'not set'}.`,
+      }
     }
   }
 
