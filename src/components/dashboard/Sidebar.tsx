@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
@@ -13,6 +14,8 @@ import {
   PenSquare,
   Lightbulb,
   Settings,
+  Crown,
+  Sparkles,
 } from 'lucide-react'
 
 const GROUPS: {
@@ -47,6 +50,24 @@ const GROUPS: {
 
 export function Sidebar() {
   const pathname = usePathname()
+  const [plan, setPlan] = useState<{ plan: string; trialDaysLeft: number }>({ plan: 'free', trialDaysLeft: 7 })
+
+  useEffect(() => {
+    fetch('/api/dashboard/settings')
+      .then((r) => r.json())
+      .then((d) => {
+        const userPlan = d.settings?.plan ?? 'free'
+        const createdAt = d.settings?.created_at ? new Date(d.settings.created_at).getTime() : Date.now()
+        const daysSince = Math.floor((Date.now() - createdAt) / 86400000)
+        const trialDaysLeft = Math.max(0, 7 - daysSince)
+        setPlan({ plan: userPlan, trialDaysLeft })
+      })
+      .catch(() => {})
+  }, [])
+
+  const isPaid = plan.plan === 'dashboard' || plan.plan === 'complete'
+  const isTrial = plan.plan === 'free' && plan.trialDaysLeft > 0
+  const isExpired = plan.plan === 'free' && plan.trialDaysLeft <= 0
 
   return (
     <aside className="fixed left-0 top-0 h-full w-[220px] bg-card border-r border-border flex flex-col z-50">
@@ -102,6 +123,51 @@ export function Sidebar() {
           </div>
         ))}
       </nav>
+
+      {/* Plan widget */}
+      <div className="px-3 pb-2">
+        {isPaid ? (
+          <div className="bg-primary/5 border border-primary/20 rounded-lg px-3 py-2.5">
+            <div className="flex items-center gap-2">
+              <Crown size={14} className="text-primary" />
+              <span className="text-[12px] font-semibold text-foreground">
+                {plan.plan === 'complete' ? 'Nivi Pro' : 'Nivi Starter'}
+              </span>
+            </div>
+            <p className="text-[10px] text-muted-foreground mt-1">All features active</p>
+          </div>
+        ) : isTrial ? (
+          <div className="bg-amber-500/5 border border-amber-500/20 rounded-lg px-3 py-2.5">
+            <div className="flex items-center gap-2">
+              <Sparkles size={14} className="text-amber-500" />
+              <span className="text-[12px] font-semibold text-foreground">Free Trial</span>
+            </div>
+            <p className="text-[10px] text-muted-foreground mt-1">
+              {plan.trialDaysLeft} day{plan.trialDaysLeft !== 1 ? 's' : ''} remaining
+            </p>
+            <Link
+              href="/pricing"
+              className="mt-2 block text-center text-[11px] bg-primary text-primary-foreground rounded-md py-1.5 font-medium hover:opacity-90 transition-opacity"
+            >
+              Upgrade
+            </Link>
+          </div>
+        ) : isExpired ? (
+          <div className="bg-destructive/5 border border-destructive/20 rounded-lg px-3 py-2.5">
+            <div className="flex items-center gap-2">
+              <Sparkles size={14} className="text-destructive" />
+              <span className="text-[12px] font-semibold text-foreground">Trial Ended</span>
+            </div>
+            <p className="text-[10px] text-muted-foreground mt-1">Upgrade to continue</p>
+            <Link
+              href="/pricing"
+              className="mt-2 block text-center text-[11px] bg-primary text-primary-foreground rounded-md py-1.5 font-medium hover:opacity-90 transition-opacity"
+            >
+              Upgrade Now
+            </Link>
+          </div>
+        ) : null}
+      </div>
 
       {/* Bottom */}
       <div className="h-px bg-border" />

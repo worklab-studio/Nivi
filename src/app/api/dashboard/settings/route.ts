@@ -8,7 +8,7 @@ export async function GET() {
   const supabase = getSupabaseAdmin()
   const { data } = await supabase
     .from('users')
-    .select('posting_time, engagement_time, timezone, plan, whatsapp_number, unipile_account_id, brand_kit')
+    .select('posting_time, engagement_time, timezone, plan, whatsapp_number, unipile_account_id, brand_kit, created_at')
     .eq('id', userId)
     .single()
 
