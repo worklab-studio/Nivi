@@ -97,13 +97,12 @@ export async function GET(req: Request) {
     }
   } catch { /* skip */ }
 
-  // === 3. LINKEDIN ANALYTICS SYNC (once daily, only active paid users) ===
+  // === 3. LINKEDIN ANALYTICS SYNC (once daily, all users with LinkedIn) ===
   try {
     const { data: users } = await supabase
       .from('users')
       .select('id, unipile_account_id')
       .not('unipile_account_id', 'is', null)
-      .in('plan', ['dashboard', 'complete'])
       .limit(50)
 
     // Only run between 3-4 AM UTC to avoid duplicate runs

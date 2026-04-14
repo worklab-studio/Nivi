@@ -331,15 +331,20 @@ export async function GET() {
     streakDays,
     postsThisWeek,
     metrics: {
-      impressions: last7dImpressions,
+      // Show last 7 days if there's data, otherwise show all-time so dashboard doesn't look empty
+      impressions: last7dImpressions || sum(published, 'impressions'),
       impressionsDelta: delta(last7dImpressions, prev7dImpressions),
-      likes: last7dLikes,
+      likes: last7dLikes || sum(published, 'likes'),
       likesDelta: delta(last7dLikes, prev7dLikes),
-      comments: last7dComments,
+      comments: last7dComments || sum(published, 'comments'),
       commentsDelta: delta(last7dComments, prev7dComments),
-      engagementRate: avgEngagement,
+      engagementRate: avgEngagement || (published.length > 0
+        ? Math.round(published.reduce((s, p) => s + (getAnalytics(p).engagement_rate ?? 0), 0) / published.length * 10) / 10
+        : 0),
       streak: user?.streak_count ?? 0,
       totalPublished: published.length,
+      // Tell frontend which period is being shown
+      period: last7dImpressions > 0 ? 'last 7 days' : (published.length > 0 ? 'all time' : 'last 7 days'),
     },
     today: todayPost
       ? {
