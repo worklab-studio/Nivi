@@ -65,16 +65,24 @@ export async function GET(req: Request) {
           const msgTime = msg.timestamp ? new Date(msg.timestamp).getTime() : 0
           if (msgTime && msgTime < Date.now() - 120000) continue
 
-          // Dedup
-          const { data: existing } = await supabase
-            .from('conversations')
+          // Dedup by message ID (reliable, prevents duplicates)
+          const dedupKey = `wa_msg_${msg.id}`
+          const { data: alreadyProcessed } = await supabase
+            .from('user_memory')
             .select('id')
             .eq('user_id', user.id)
-            .eq('role', 'user')
-            .eq('content', msg.text)
-            .gte('created_at', new Date(Date.now() - 180000).toISOString())
+            .eq('fact', dedupKey)
+            .eq('category', 'poll_dedup')
             .limit(1)
-          if (existing && existing.length > 0) continue
+          if (alreadyProcessed && alreadyProcessed.length > 0) continue
+
+          // Mark as processed BEFORE doing anything
+          await supabase.from('user_memory').insert({
+            user_id: user.id,
+            fact: dedupKey,
+            category: 'poll_dedup',
+            source: 'system',
+          })
 
           processedIds.add(msg.id)
           console.log(`[poll-wa] ${phone}: "${msg.text.slice(0, 40)}"`)
