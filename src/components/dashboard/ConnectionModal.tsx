@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { X, Link2, MessageCircle, Loader2, Check } from 'lucide-react'
+import { X, Link2, MessageCircle, Loader2, Check, Shield, Lock } from 'lucide-react'
 
 interface Props {
   open: boolean
@@ -98,7 +98,7 @@ export function ConnectionModal({
                 <div>
                   <p className="text-[14px] font-medium text-foreground">LinkedIn</p>
                   <p className="text-[11px] text-muted-foreground">
-                    {liDone ? 'Connected — analytics syncing' : 'Required for posting & analytics'}
+                    {liDone ? 'Connected securely' : 'Required for posting & analytics'}
                   </p>
                 </div>
               </div>
@@ -110,12 +110,25 @@ export function ConnectionModal({
                 <button
                   onClick={handleLinkedInConnect}
                   disabled={liConnecting}
-                  className="text-[12px] px-4 py-2 bg-primary text-primary-foreground rounded-lg font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
+                  className="text-[12px] px-4 py-2 bg-[#0A66C2] text-white rounded-lg font-medium hover:bg-[#0958a8] transition-colors disabled:opacity-50 flex items-center gap-1.5"
                 >
-                  {liConnecting ? <Loader2 size={14} className="animate-spin" /> : 'Connect'}
+                  {liConnecting ? <Loader2 size={14} className="animate-spin" /> : <><Lock size={11} /> Connect</>}
                 </button>
               )}
             </div>
+
+            {!liDone && !liConnecting && (
+              <div className="mt-3 pt-3 border-t border-border/50 space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <Shield size={10} className="text-emerald-600 flex-shrink-0" />
+                  <p className="text-[10px] text-muted-foreground">Password encrypted, never stored on our servers</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Shield size={10} className="text-emerald-600 flex-shrink-0" />
+                  <p className="text-[10px] text-muted-foreground">Powered by Unipile, enterprise integration platform</p>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* WhatsApp */}

@@ -197,14 +197,21 @@ export default function SettingsPage() {
         <Section icon={Link2} title="Connections">
           <div className="space-y-4">
             {/* LinkedIn */}
-            <ConnectionRow
-              name="LinkedIn"
-              description={settings?.unipile_account_id ? 'Connected — posting & analytics active' : 'Connect to publish posts and sync analytics'}
-              connected={!!settings?.unipile_account_id}
-              actionLabel={linkedInConnecting ? 'Connecting…' : settings?.unipile_account_id ? 'Reconnect' : 'Connect'}
-              onAction={handleLinkedInConnect}
-              disabled={linkedInConnecting}
-            />
+            <div>
+              <ConnectionRow
+                name="LinkedIn"
+                description={settings?.unipile_account_id ? 'Connected securely' : 'Connect to publish posts and sync analytics'}
+                connected={!!settings?.unipile_account_id}
+                actionLabel={linkedInConnecting ? 'Connecting…' : settings?.unipile_account_id ? 'Reconnect' : 'Connect securely'}
+                onAction={handleLinkedInConnect}
+                disabled={linkedInConnecting}
+              />
+              {!settings?.unipile_account_id && (
+                <p className="text-[10px] text-muted-foreground mt-1.5 ml-5">
+                  Encrypted connection via Unipile. Your password is never stored.
+                </p>
+              )}
+            </div>
 
             {/* WhatsApp */}
             <div>

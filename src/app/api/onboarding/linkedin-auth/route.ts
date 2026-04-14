@@ -20,7 +20,7 @@ export async function POST() {
         expiresOn: new Date(Date.now() + 3600000).toISOString().replace(/\.\d{3}Z$/, '.000Z'),
         success_redirect_url: `${process.env.NEXT_PUBLIC_APP_URL}/api/onboarding/linkedin-callback?userId=${userId}&status=connected`,
         failure_redirect_url: `${process.env.NEXT_PUBLIC_APP_URL}/api/onboarding/linkedin-callback?userId=${userId}&status=failed`,
-        name: userId,
+        name: `Hello Nivi - ${userId}`,
       }),
     }
   )
