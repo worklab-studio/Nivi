@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { X, Link2, MessageCircle, Loader2, Check, Shield, Lock } from 'lucide-react'
 
 interface Props {
@@ -66,6 +66,23 @@ export function ConnectionModal({
     } catch { /* ignore */ }
     setWaSending(false)
   }
+
+  // Poll for WhatsApp connection after message is sent
+  useEffect(() => {
+    if (!waSent || waDone) return
+    const interval = setInterval(async () => {
+      try {
+        const r = await fetch('/api/onboarding/check-whatsapp')
+        const d = await r.json()
+        if (d.connected) {
+          setWaDone(true)
+          onWhatsAppConnected?.()
+          clearInterval(interval)
+        }
+      } catch { /* ignore */ }
+    }, 3000)
+    return () => clearInterval(interval)
+  }, [waSent, waDone, onWhatsAppConnected])
 
   if (!open) return null
 
