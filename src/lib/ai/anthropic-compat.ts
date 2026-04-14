@@ -124,34 +124,32 @@ function sanitizeText(str: string): string {
 }
 
 function sanitizeParams(params: CreateParams): CreateParams {
-  const clean = { ...params }
-
   // Sanitize system prompt
-  if (typeof clean.system === 'string') {
-    clean.system = sanitizeText(clean.system)
-  } else if (Array.isArray(clean.system)) {
-    clean.system = clean.system.map((s) => ({ ...s, text: sanitizeText(s.text) }))
+  let system = params.system
+  if (typeof system === 'string') {
+    system = sanitizeText(system)
+  } else if (Array.isArray(system)) {
+    system = system.map((s) => ({ type: s.type, text: sanitizeText(s.text), cache_control: s.cache_control }))
   }
 
   // Sanitize messages
-  clean.messages = clean.messages.map((m) => {
+  const messages: MessageParam[] = params.messages.map((m) => {
     if (typeof m.content === 'string') {
-      return { ...m, content: sanitizeText(m.content) }
+      return { role: m.role, content: sanitizeText(m.content) }
     }
+    // For array content (tool_use, tool_result, text blocks), sanitize text fields
     if (Array.isArray(m.content)) {
-      return {
-        ...m,
-        content: m.content.map((block) => {
-          if (block.type === 'text') return { ...block, text: sanitizeText((block as TextBlock).text) }
-          if (block.type === 'tool_result') return { ...block, content: sanitizeText((block as ToolResultBlock).content) }
-          return block
-        }),
-      }
+      const cleaned = m.content.map((block) => {
+        if (block.type === 'text') return { type: 'text' as const, text: sanitizeText((block as TextBlock).text) }
+        if (block.type === 'tool_result') return { type: 'tool_result' as const, tool_use_id: (block as ToolResultBlock).tool_use_id, content: sanitizeText((block as ToolResultBlock).content) }
+        return block
+      })
+      return { role: m.role, content: cleaned } as MessageParam
     }
     return m
   })
 
-  return clean
+  return { ...params, system, messages }
 }
 
 async function callAnthropic(params: CreateParams): Promise<CreateResponse> {
