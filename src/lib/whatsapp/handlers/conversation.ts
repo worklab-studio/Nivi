@@ -2095,21 +2095,21 @@ Rules for the block above:
   // Extract memory async
   extractAndSaveMemory(userId, text, finalText).catch(() => {})
 
-  // ─── Human-style bubble splitting ──────────────────────────────
-  // Real humans send multiple WhatsApp bubbles when they have multiple
-  // thoughts. Split on blank lines (the model is now trained to separate
-  // thoughts with \n\n), cap at MAX_BUBBLES to avoid spam, then send each
-  // with a short delay to mimic a typing pause.
-  const MAX_BUBBLES = 4
-  const TYPING_DELAY_MS = 900
-
-  const bubbles = splitIntoBubbles(finalText, MAX_BUBBLES)
-
-  for (let i = 0; i < bubbles.length; i++) {
-    await sendWhatsApp(user.whatsapp_number, bubbles[i], user.chatId)
-    if (i < bubbles.length - 1) {
-      await new Promise((r) => setTimeout(r, TYPING_DELAY_MS))
+  // ─── Send reply ──────────────────────────────────────────────────
+  // For short casual replies (under 300 chars), split into max 2 bubbles
+  // for a natural feel. For long replies (posts, strategies, etc.),
+  // send as a single message to keep content intact and avoid spam.
+  if (finalText.length < 300) {
+    const bubbles = splitIntoBubbles(finalText, 2)
+    for (let i = 0; i < bubbles.length; i++) {
+      await sendWhatsApp(user.whatsapp_number, bubbles[i], user.chatId)
+      if (i < bubbles.length - 1) {
+        await new Promise((r) => setTimeout(r, 800))
+      }
     }
+  } else {
+    // Long content (posts, strategies) — send as single message
+    await sendWhatsApp(user.whatsapp_number, finalText, user.chatId)
   }
   return Response.json({ ok: true })
 }
