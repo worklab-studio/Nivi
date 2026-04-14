@@ -113,5 +113,87 @@ export async function GET(req: Request) {
     }
   } catch { /* skip */ }
 
+  // === 4. TRIAL NOTIFICATIONS ===
+  try {
+    const { data: trialUsers } = await supabase
+      .from('users')
+      .select('id, name, whatsapp_number, plan, created_at')
+      .eq('plan', 'free')
+      .not('whatsapp_number', 'is', null)
+      .limit(50)
+
+    for (const u of trialUsers ?? []) {
+      const createdAt = new Date(u.created_at).getTime()
+      const daysSinceSignup = Math.floor((Date.now() - createdAt) / 86400000)
+
+      // Day 0: Welcome message (only within first hour)
+      const hoursSinceSignup = (Date.now() - createdAt) / 3600000
+      if (hoursSinceSignup < 1) {
+        // Check if we already sent welcome
+        const { data: sent } = await supabase
+          .from('user_memory')
+          .select('id')
+          .eq('user_id', u.id)
+          .eq('category', 'trial_welcome_sent')
+          .limit(1)
+
+        if (!sent || sent.length === 0) {
+          await sendWhatsApp(
+            u.whatsapp_number,
+            `hey ${u.name}! welcome to hello nivi 🎉\n\nyour 7-day free trial just started. here's what i can do for you:\n\n- write linkedin posts in your voice\n- draft strategic comments\n- manage your content calendar\n- morning briefs every day\n\njust text me anytime. let's start with your first post?`
+          )
+          await supabase.from('user_memory').insert({
+            user_id: u.id,
+            category: 'trial_welcome_sent',
+            fact: 'true',
+            source: 'system',
+          })
+          results.push(`trial welcome sent to ${u.name}`)
+        }
+      }
+
+      // Day 6: Expiry warning
+      if (daysSinceSignup === 6) {
+        const { data: sent } = await supabase
+          .from('user_memory')
+          .select('id')
+          .eq('user_id', u.id)
+          .eq('category', 'trial_expiry_sent')
+          .limit(1)
+
+        if (!sent || sent.length === 0) {
+          // Count what we did together
+          const { count: postCount } = await supabase
+            .from('posts')
+            .select('*', { count: 'exact', head: true })
+            .eq('user_id', u.id)
+
+          const { count: commentCount } = await supabase
+            .from('comment_opportunities')
+            .select('*', { count: 'exact', head: true })
+            .eq('user_id', u.id)
+            .eq('status', 'posted')
+
+          const { count: convCount } = await supabase
+            .from('conversations')
+            .select('*', { count: 'exact', head: true })
+            .eq('user_id', u.id)
+
+          await sendWhatsApp(
+            u.whatsapp_number,
+            `hey ${u.name}, just checking in.\n\nwe had an amazing week together. here's what we did:\n- ${postCount ?? 0} posts created\n- ${commentCount ?? 0} strategic comments\n- ${convCount ?? 0} conversations\n\nhowever, i see you haven't upgraded your hello nivi plan yet. i have just 1 day left to work with you.\n\nmake sure you upgrade if you want us to keep working together on your linkedin: ${process.env.NEXT_PUBLIC_APP_URL}/pricing`
+          )
+          await supabase.from('user_memory').insert({
+            user_id: u.id,
+            category: 'trial_expiry_sent',
+            fact: 'true',
+            source: 'system',
+          })
+          results.push(`trial expiry warning sent to ${u.name}`)
+        }
+      }
+    }
+  } catch { /* skip */ }
+
   return Response.json({ ok: true, results, time: now.toISOString() })
 }
