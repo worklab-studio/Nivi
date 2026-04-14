@@ -16,6 +16,7 @@ import {
   Check,
   ChevronRight,
   Crown,
+  Target,
 } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { toast } from 'sonner'
@@ -29,6 +30,7 @@ interface UserSettings {
   unipile_account_id: string | null
   brand_kit: Record<string, unknown>
   ls_subscription_id: string | null
+  posting_goal: number | null
 }
 
 const TIMEZONES = [
@@ -289,6 +291,27 @@ export default function SettingsPage() {
               />
             </SettingRow>
           </div>
+        </Section>
+
+        {/* ──── POSTING GOAL ──── */}
+        <Section icon={Target} title="Posting Goal">
+          <SettingRow label="Posts per week" description="Nivi will nudge you to stay consistent">
+            <div className="flex items-center gap-3">
+              {[1, 2, 3, 4, 5, 6, 7].map((n) => (
+                <button
+                  key={n}
+                  onClick={() => saveField('posting_goal', String(n))}
+                  className={`w-8 h-8 rounded-lg text-[12px] font-medium transition-all ${
+                    (settings?.posting_goal ?? 4) === n
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-secondary text-muted-foreground hover:text-foreground hover:bg-secondary/80'
+                  }`}
+                >
+                  {n}
+                </button>
+              ))}
+            </div>
+          </SettingRow>
         </Section>
 
         {/* ──── TIMEZONE ──── */}

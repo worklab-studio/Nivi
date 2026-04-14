@@ -266,6 +266,17 @@ ${currentDraft || '(no draft yet — this is the first turn)'}`
     )
   }
 
+  // Log event for Nivi proactive outreach
+  if (saved && savedPostId) {
+    supabase.from('user_events').insert({
+      user_id: userId,
+      event_type: 'draft_created',
+      metadata: { post_id: savedPostId },
+    }).then(() => {}).catch(() => {})
+  }
+  // Update last_active_at
+  supabase.from('users').update({ last_active_at: new Date().toISOString() }).eq('id', userId).then(() => {}).catch(() => {})
+
   return Response.json({
     reply: reply.trim(),
     updatedDraft,

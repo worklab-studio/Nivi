@@ -82,6 +82,12 @@ export async function GET(req: Request) {
       try {
         await publishToLinkedIn(sp.user_id, sp.post_id)
         await supabase.from('scheduled_posts').update({ status: 'done' }).eq('id', sp.id)
+        // Log event for Nivi proactive outreach
+        await supabase.from('user_events').insert({
+          user_id: sp.user_id,
+          event_type: 'post_published',
+          metadata: { post_id: sp.post_id, source: 'scheduled' },
+        }).catch(() => {})
         results.push(`scheduled post published`)
       } catch {
         await supabase.from('scheduled_posts').update({ status: 'failed' }).eq('id', sp.id)

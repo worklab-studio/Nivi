@@ -74,5 +74,13 @@ export async function PATCH(req: Request) {
     distillIdentity(userId).catch(() => {})
   }
 
+  // Log event for Nivi proactive outreach
+  supabase.from('user_events').insert({
+    user_id: userId,
+    event_type: 'identity_updated',
+    metadata: { fields: Object.keys(updates) },
+  }).then(() => {}).catch(() => {})
+  supabase.from('users').update({ last_active_at: new Date().toISOString() }).eq('id', userId).then(() => {}).catch(() => {})
+
   return Response.json({ identity: data })
 }
