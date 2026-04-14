@@ -60,6 +60,7 @@ interface OverviewData {
     engagementRate: number
     streak: number
     totalPublished: number
+    period?: string
   }
   today: {
     status: 'draft' | 'scheduled' | 'published' | null
@@ -427,16 +428,15 @@ export default function OverviewPage() {
       {/* ──── METRICS ──── */}
       {(() => {
         const cards = [
-          { icon: Eye, label: 'Impressions', value: data?.metrics.impressions ?? 0, fmtValue: fmtNum(data?.metrics.impressions ?? 0), delta: data?.metrics.impressionsDelta, hint: 'last 7 days' },
-          { icon: Heart, label: 'Reactions', value: data?.metrics.likes ?? 0, fmtValue: fmtNum(data?.metrics.likes ?? 0), delta: data?.metrics.likesDelta, hint: 'last 7 days' },
-          { icon: MessageCircle, label: 'Comments', value: data?.metrics.comments ?? 0, fmtValue: fmtNum(data?.metrics.comments ?? 0), delta: data?.metrics.commentsDelta, hint: 'last 7 days' },
+          { icon: Eye, label: 'Impressions', value: data?.metrics.impressions ?? 0, fmtValue: fmtNum(data?.metrics.impressions ?? 0), delta: data?.metrics.impressionsDelta, hint: data?.metrics.period ?? 'last 7 days' },
+          { icon: Heart, label: 'Reactions', value: data?.metrics.likes ?? 0, fmtValue: fmtNum(data?.metrics.likes ?? 0), delta: data?.metrics.likesDelta, hint: data?.metrics.period ?? 'last 7 days' },
+          { icon: MessageCircle, label: 'Comments', value: data?.metrics.comments ?? 0, fmtValue: fmtNum(data?.metrics.comments ?? 0), delta: data?.metrics.commentsDelta, hint: data?.metrics.period ?? 'last 7 days' },
           { icon: BarChart3, label: 'Engagement', value: data?.metrics.engagementRate ?? 0, fmtValue: `${data?.metrics.engagementRate ?? 0}%`, hint: 'avg rate' },
-          { icon: FileText, label: 'Published', value: data?.metrics.totalPublished ?? 0, fmtValue: `${data?.metrics.totalPublished ?? 0}`, hint: 'total posts', alwaysShow: true },
+          { icon: FileText, label: 'Published', value: data?.metrics.totalPublished ?? 0, fmtValue: `${data?.metrics.totalPublished ?? 0}`, hint: 'total posts' },
         ]
-        // Always show Published; others only if they have data or if any metric has data
-        const anyData = cards.some((c) => c.value > 0)
-        const visible = anyData ? cards : cards.filter((c) => (c as { alwaysShow?: boolean }).alwaysShow)
-        const cols = visible.length >= 5 ? 'lg:grid-cols-5' : visible.length >= 3 ? 'lg:grid-cols-3' : 'lg:grid-cols-2'
+        // Always show all KPI cards
+        const visible = cards
+        const cols = 'lg:grid-cols-5'
         return (
           <div className={`grid grid-cols-2 md:grid-cols-3 ${cols} gap-3 mb-6`}>
             {visible.map((c) => (

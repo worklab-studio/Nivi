@@ -25,6 +25,21 @@ export async function GET(req: NextRequest) {
         linkedin_connected_at: new Date().toISOString(),
       })
       .eq('id', userId)
+
+    // Trigger immediate analytics sync so KPIs show from the start
+    try {
+      const { syncLinkedInAnalytics } = await import('@/lib/unipile/syncAnalytics')
+      await syncLinkedInAnalytics(userId)
+    } catch (err) {
+      console.error('[linkedin-callback] analytics sync failed:', (err as Error).message)
+    }
+
+    // Log event for Nivi proactive outreach
+    void supabase.from('user_events').insert({
+      user_id: userId,
+      event_type: 'linkedin_connected',
+      metadata: { account_id: accountId },
+    })
   }
 
   // Close popup window
