@@ -175,26 +175,20 @@ export async function GET(req: Request) {
           : newTexts.join('\n')
 
         // === ATOMIC LOCK: prevent overlapping cron invocations ===
-        // Try to claim this user by setting last_active_at to NOW.
-        // Only proceed if last_active_at was > 30s ago (meaning no other
-        // cron invocation is currently processing this user).
-        const { data: lockCheck } = await supabase
-          .from('users')
-          .select('last_active_at')
-          .eq('id', user.id)
-          .single()
-        const lastActive = lockCheck?.last_active_at
-          ? new Date(lockCheck.last_active_at).getTime()
-          : 0
-        if (Date.now() - lastActive < 30000) {
-          console.log(`[poll-wa] skipping ${phone} — another invocation is processing`)
-          continue
-        }
-        // Claim the lock
-        await supabase
+        // Update last_active_at ONLY if it's null or older than 30s.
+        // If the update affects 0 rows, another invocation already claimed this user.
+        const thirtySecsAgo = new Date(Date.now() - 30000).toISOString()
+        const { data: lockResult } = await supabase
           .from('users')
           .update({ last_active_at: new Date().toISOString() })
           .eq('id', user.id)
+          .or(`last_active_at.is.null,last_active_at.lt.${thirtySecsAgo}`)
+          .select('id')
+
+        if (!lockResult || lockResult.length === 0) {
+          console.log(`[poll-wa] skipping ${phone} — locked by another invocation`)
+          continue
+        }
 
         console.log(`[poll-wa] ${phone}: "${combinedText.slice(0, 60)}" (${newTexts.length} msgs)`)
 
