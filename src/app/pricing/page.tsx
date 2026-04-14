@@ -94,7 +94,7 @@ export default function PricingPage() {
           Simple pricing
         </h1>
         <p className="text-[#888] text-lg max-w-lg mx-auto">
-          Start with a 7-day free trial. No credit card required.
+          7 days free. No credit card required. Cancel anytime.
         </p>
       </div>
 
@@ -133,7 +133,7 @@ export default function PricingPage() {
                     : 'bg-[#222] text-white hover:bg-[#333]'
                 } disabled:opacity-50`}
               >
-                {loading === plan.id ? 'Loading…' : 'Start 7-day free trial'}
+                {loading === plan.id ? 'Loading…' : isSignedIn ? 'Upgrade now' : 'Start free for 7 days'}
               </button>
 
               <ul className="space-y-3">

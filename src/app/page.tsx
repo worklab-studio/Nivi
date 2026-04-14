@@ -268,7 +268,7 @@ export default async function LandingPage() {
           </p>
           <div className="flex items-center justify-center gap-4 mb-4">
             <Link href="/sign-up" className="inline-block bg-white text-black text-sm px-10 py-4 rounded-lg font-medium hover:bg-white/90 transition-all hover:shadow-[0_0_30px_rgba(255,255,255,0.12)]">
-              Start your 7-day free trial
+              Get started free
             </Link>
           </div>
           <p className="text-xs text-[#555]">No credit card · Cancel anytime · Setup in 10 minutes</p>
