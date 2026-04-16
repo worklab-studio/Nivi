@@ -1,12 +1,16 @@
 import { auth, currentUser } from '@clerk/nextjs/server'
 import { getSupabaseAdmin } from '@/lib/supabase/admin'
 import { getCachedLinkedInProfile } from '@/lib/unipile/profile'
+import { ensureUser } from '@/lib/auth/ensureUser'
 // getMyRecentPosts removed — post dates now come from local DB (synced by cron)
 import { startOfWeek, startOfYear, subWeeks, format, subDays, eachDayOfInterval } from 'date-fns'
 
 export async function GET() {
   const { userId } = await auth()
   if (!userId) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+
+  // Ensure user row exists (Clerk webhook may have failed)
+  await ensureUser(userId)
 
   const supabase = getSupabaseAdmin()
 

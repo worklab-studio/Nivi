@@ -1,8 +1,12 @@
 import { auth } from '@clerk/nextjs/server'
+import { ensureUser } from '@/lib/auth/ensureUser'
 
 export async function POST() {
   const { userId } = await auth()
   if (!userId) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+
+  // Ensure user row exists (Clerk webhook may have failed)
+  await ensureUser(userId)
 
   // Unipile hosted auth — creates a popup URL for LinkedIn OAuth
   const res = await fetch(

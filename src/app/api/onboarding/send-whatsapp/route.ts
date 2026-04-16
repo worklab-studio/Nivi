@@ -1,6 +1,7 @@
 import { auth } from '@clerk/nextjs/server'
 import { getSupabaseAdmin } from '@/lib/supabase/admin'
 import { sendWhatsApp } from '@/lib/whatsapp/send'
+import { ensureUser } from '@/lib/auth/ensureUser'
 
 /**
  * Sends a WhatsApp verification message from Nivi to the user's phone number.
@@ -23,6 +24,9 @@ export async function POST(req: Request) {
   }
 
   const supabase = getSupabaseAdmin()
+
+  // Ensure user row exists (Clerk webhook may have failed)
+  await ensureUser(userId)
 
   // Store the pending phone number so the webhook can match it
   await supabase
