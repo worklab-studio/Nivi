@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { usePostHog } from 'posthog-js/react'
 
 interface Step3Props {
   onNext: () => void
@@ -8,6 +9,7 @@ interface Step3Props {
 }
 
 export function Step3WhatsApp({ onNext, onBack }: Step3Props) {
+  const ph = usePostHog()
   const [phone, setPhone] = useState('')
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)
@@ -34,6 +36,7 @@ export function Step3WhatsApp({ onNext, onBack }: Step3Props) {
 
   async function handleSend() {
     if (!phone.trim() || sending) return
+    ph?.capture('whatsapp_connect_initiated', { source: 'onboarding' })
     setSending(true)
     try {
       const res = await fetch('/api/onboarding/send-whatsapp', {

@@ -4,6 +4,7 @@ import { pickModel } from '@/lib/ai/router'
 import { getSupabaseAdmin } from '@/lib/supabase/admin'
 import { buildComposeSystemPrompt } from '@/lib/claude/composeSystemPrompt'
 import { extractAndSaveMemory, extractEditMemory } from '@/lib/claude/extractMemory'
+import { captureServerEvent } from '@/lib/analytics/posthog'
 
 /**
  * Compose chat handler.
@@ -282,7 +283,17 @@ ${currentDraft || '(no draft yet — this is the first turn)'}`)
       event_type: 'draft_created',
       metadata: { post_id: savedPostId },
     })
+    captureServerEvent(userId, 'compose_draft_saved', {
+      postId: savedPostId,
+      contentLength: updatedDraft?.length ?? 0,
+    })
   }
+  // Always track that a compose message was sent
+  captureServerEvent(userId, 'compose_message_sent', {
+    messageLength: userMessage.length,
+    hasDraft: !!currentDraft,
+    draftChanged: updatedDraft !== null,
+  })
   void supabase.from('users').update({ last_active_at: new Date().toISOString() }).eq('id', userId)
 
   return Response.json({

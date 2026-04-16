@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Shield, Lock, Eye, LogOut, CheckCircle2, ExternalLink } from 'lucide-react'
+import { usePostHog } from 'posthog-js/react'
 
 interface Step2Props {
   onNext: () => void
@@ -9,12 +10,14 @@ interface Step2Props {
 }
 
 export function Step2LinkedIn({ onNext, onBack }: Step2Props) {
+  const ph = usePostHog()
   const [loading, setLoading] = useState(false)
   const [connected, setConnected] = useState(false)
   const [error, setError] = useState('')
   const [showTrust, setShowTrust] = useState(true)
 
   const handleConnect = async () => {
+    ph?.capture('linkedin_connect_clicked', { source: 'onboarding' })
     setLoading(true)
     setError('')
     try {

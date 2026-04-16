@@ -1,6 +1,7 @@
 import { getSupabaseAdmin } from '@/lib/supabase/admin'
 import { sendWhatsApp } from '@/lib/whatsapp/send'
 import { handleConversation } from '@/lib/whatsapp/handlers/conversation'
+import { captureServerEvent } from '@/lib/analytics/posthog'
 
 export const maxDuration = 300
 
@@ -203,8 +204,20 @@ export async function GET(req: Request) {
             streak_count: user.streak_count || 0,
             onboarding_complete: user.onboarding_complete ?? true,
           }
+          // Track incoming message
+          captureServerEvent(user.id, 'whatsapp_message_received', {
+            messageLength: combinedText.length,
+            messageCount: newTexts.length,
+          })
+
           await handleConversation(user.id, fullUser, combinedText)
           totalProcessed++
+
+          // Track Nivi's reply (handleConversation sends one message)
+          captureServerEvent(user.id, 'whatsapp_message_sent', {
+            messageType: 'reply',
+          })
+
           console.log(`[poll-wa] handled via conversation for ${phone}`)
         } catch (err) {
           console.error('[poll-wa] handleConversation error:', (err as Error).message)

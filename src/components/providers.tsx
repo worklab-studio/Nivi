@@ -4,6 +4,7 @@ import { ClerkProvider } from '@clerk/nextjs'
 import { dark } from '@clerk/themes'
 import { ThemeProvider, useTheme } from 'next-themes'
 import type { ReactNode } from 'react'
+import { PostHogProvider } from './PostHogProvider'
 
 /**
  * Root client providers: next-themes + Clerk.
@@ -21,7 +22,9 @@ export function Providers({ children }: { children: ReactNode }) {
       enableSystem={true}
       disableTransitionOnChange={false}
     >
-      <ThemedClerkProvider>{children}</ThemedClerkProvider>
+      <ThemedClerkProvider>
+        <PostHogProvider>{children}</PostHogProvider>
+      </ThemedClerkProvider>
     </ThemeProvider>
   )
 }

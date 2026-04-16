@@ -1,5 +1,6 @@
 import { auth } from '@clerk/nextjs/server'
 import { getSupabaseAdmin } from '@/lib/supabase/admin'
+import { captureServerEvent } from '@/lib/analytics/posthog'
 
 export async function POST(req: Request) {
   console.log('[import-linkedin] entered POST', req.url)
@@ -38,6 +39,12 @@ export async function POST(req: Request) {
     await getSupabaseAdmin()
       .from('brand_identity')
       .upsert(updates)
+
+    captureServerEvent(userId, 'identity_imported', {
+      source: 'linkedin',
+      hasAbout: !!suggestion.about_you,
+      hasOffers: (suggestion.offer_suggestions?.length ?? 0) > 0,
+    })
 
     return Response.json({ ok: true, suggestion })
   } catch (e) {

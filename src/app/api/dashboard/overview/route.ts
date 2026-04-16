@@ -2,6 +2,7 @@ import { auth, currentUser } from '@clerk/nextjs/server'
 import { getSupabaseAdmin } from '@/lib/supabase/admin'
 import { getCachedLinkedInProfile } from '@/lib/unipile/profile'
 import { ensureUser } from '@/lib/auth/ensureUser'
+import { setPersonProperties } from '@/lib/analytics/posthog'
 // getMyRecentPosts removed — post dates now come from local DB (synced by cron)
 import { startOfWeek, startOfYear, subWeeks, format, subDays, eachDayOfInterval } from 'date-fns'
 
@@ -35,6 +36,16 @@ export async function GET() {
       .maybeSingle(),
     getCachedLinkedInProfile(userId),
   ])
+
+  // Update PostHog person properties
+  if (user) {
+    setPersonProperties(userId, {
+      name: user.name,
+      plan: 'free', // user.plan not selected — keep simple
+      linkedin_connected: !!user.unipile_account_id,
+      whatsapp_connected: !!user.whatsapp_number,
+    })
+  }
 
   const allPosts = posts ?? []
 

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { usePostHog } from 'posthog-js/react'
 import {
   LayoutDashboard,
   CalendarDays,
@@ -51,6 +52,7 @@ const GROUPS: {
 
 export function Sidebar() {
   const pathname = usePathname()
+  const ph = usePostHog()
   const [plan, setPlan] = useState<{ plan: string; trialDaysLeft: number }>({ plan: 'free', trialDaysLeft: 7 })
 
   useEffect(() => {
@@ -151,6 +153,7 @@ export function Sidebar() {
             </div>
             <Link
               href="/pricing"
+              onClick={() => ph?.capture('upgrade_clicked', { source: 'sidebar_trial' })}
               className="mt-2.5 block text-center text-[11px] border border-border text-muted-foreground rounded-md py-1.5 font-medium hover:text-foreground hover:bg-accent transition-colors"
             >
               Upgrade
@@ -164,6 +167,7 @@ export function Sidebar() {
             </div>
             <Link
               href="/pricing"
+              onClick={() => ph?.capture('upgrade_clicked', { source: 'sidebar_expired' })}
               className="mt-2.5 block text-center text-[11px] bg-primary text-primary-foreground rounded-md py-1.5 font-medium hover:opacity-90 transition-opacity"
             >
               Upgrade Now
@@ -179,6 +183,7 @@ export function Sidebar() {
           href="https://hellonivi.featurebase.app/"
           target="_blank"
           rel="noopener noreferrer"
+          onClick={() => ph?.capture('feedback_clicked')}
           className="flex items-center gap-3 px-3 py-[6px] rounded-md text-[13px] transition-colors text-muted-foreground hover:bg-secondary hover:text-foreground border border-transparent"
         >
           <MessageCircleHeart size={18} strokeWidth={1.5} className="shrink-0" />

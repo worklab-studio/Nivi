@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest } from 'next/server'
+import { captureServerEvent } from '@/lib/analytics/posthog'
 
 function getSupabaseAdmin() {
   return createClient(
@@ -75,6 +76,9 @@ export async function GET(req: NextRequest) {
       event_type: 'linkedin_connected',
       metadata: { account_id: accountId },
     })
+
+    // Track in PostHog
+    captureServerEvent(userId, 'linkedin_connected', { account_id: accountId })
   }
 
   // Close popup window

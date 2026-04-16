@@ -1,5 +1,6 @@
 import { currentUser } from '@clerk/nextjs/server'
 import { getSupabaseAdmin } from '@/lib/supabase/admin'
+import { captureServerEvent } from '@/lib/analytics/posthog'
 
 /**
  * Ensures a Supabase user row exists for the given Clerk userId.
@@ -46,6 +47,9 @@ export async function ensureUser(userId: string): Promise<void> {
       posting_time: postingTime,
       plan: 'free',
     })
+
+    // Track in PostHog (fallback creation path)
+    captureServerEvent(userId, 'user_created', { source: 'fallback', email })
 
     console.log(`[ensureUser] auto-created user ${userId} (${email})`)
   } catch (err) {

@@ -1,6 +1,7 @@
 import { Webhook } from 'svix'
 import { headers } from 'next/headers'
 import { createClient } from '@supabase/supabase-js'
+import { captureServerEvent } from '@/lib/analytics/posthog'
 
 function getSupabaseAdmin() {
   return createClient(
@@ -41,6 +42,12 @@ export async function POST(req: Request) {
       // publish at exactly 09:00 from Unipile's IPs (a vendor-level cluster
       // signature LinkedIn picks up on). Range: 08:00–11:30 in 15-min slots.
       posting_time: randomMorningTime(),
+    })
+
+    // Track in PostHog
+    captureServerEvent(event.data.id, 'user_created', {
+      source: 'webhook',
+      email: event.data.email_addresses[0].email_address,
     })
   }
 

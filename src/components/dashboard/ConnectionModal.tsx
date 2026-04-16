@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { X, Link2, MessageCircle, Loader2, Check, Shield, Lock } from 'lucide-react'
+import { usePostHog } from 'posthog-js/react'
 
 interface Props {
   open: boolean
@@ -20,6 +21,7 @@ export function ConnectionModal({
   onLinkedInConnected,
   onWhatsAppConnected,
 }: Props) {
+  const ph = usePostHog()
   const [liConnecting, setLiConnecting] = useState(false)
   const [liDone, setLiDone] = useState(linkedinConnected)
   const [waPhone, setWaPhone] = useState('')
@@ -28,6 +30,7 @@ export function ConnectionModal({
   const [waDone, setWaDone] = useState(whatsappConnected)
 
   async function handleLinkedInConnect() {
+    ph?.capture('linkedin_connect_clicked', { source: 'dashboard' })
     setLiConnecting(true)
     try {
       const res = await fetch('/api/onboarding/linkedin-auth', { method: 'POST' })
@@ -56,6 +59,7 @@ export function ConnectionModal({
 
   async function handleWhatsAppSend() {
     if (!waPhone.trim() || waSending) return
+    ph?.capture('whatsapp_connect_initiated', { source: 'dashboard' })
     setWaSending(true)
     try {
       const res = await fetch('/api/onboarding/send-whatsapp', {
