@@ -103,10 +103,17 @@ export async function handleMedia(
       } catch { /* skip */ }
     }
 
-    // Feed the analysis to Nivi as context
+    // Feed the analysis to Nivi as context.
+    // For images: the image is already saved as pending_image_url and will
+    // auto-attach to the next LinkedIn post when published. Tell Nivi explicitly
+    // so she can mention it naturally instead of saying "i'll just describe it".
+    const imageNote = isImage
+      ? ' THE IMAGE IS ALREADY UPLOADED AND WILL AUTO-ATTACH TO THE NEXT POST WHEN PUBLISHED. Just confirm with the user (e.g. "got the pic, ill use it on your next post") and either write a post around it or ask what they want to say with it.'
+      : ''
+
     const contextualMessage = caption
-      ? `[user shared ${isImage ? 'an image' : 'a PDF'} with caption: "${caption}". Content analysis: ${analysis}]`
-      : `[user shared ${isImage ? 'an image' : 'a PDF'}. Content analysis: ${analysis}]`
+      ? `[user shared ${isImage ? 'an image' : 'a PDF'} with caption: "${caption}". Content analysis: ${analysis}.${imageNote}]`
+      : `[user shared ${isImage ? 'an image' : 'a PDF'}. Content analysis: ${analysis}.${imageNote}]`
 
     await handleConversation(userId, user, contextualMessage)
     return

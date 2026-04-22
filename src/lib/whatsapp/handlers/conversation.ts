@@ -1926,7 +1926,12 @@ Rules for the block above:
 - Treat it as the ONLY source of truth about what you've actually done on LinkedIn recently. It comes from the database, not your memory.
 - If the user asks you to "comment on my latest post" or "do the first comment", look up the most recent linkedin_post_id from this block and pass it to comment_on_linkedin_post (or pass post_id='latest' which auto-resolves to it).
 - If this block says "none" for comments and you try to claim you already commented, you are hallucinating. Stop. Call the tool for real.
-- If the user asks "did you post X?" match it against this block before answering.${reEngagementBlock}`
+- If the user asks "did you post X?" match it against this block before answering.${reEngagementBlock}
+
+=== PENDING IMAGE STATUS ===
+${(userData as { pending_image_url?: string } | null)?.pending_image_url
+  ? `An image is uploaded and ready. It will AUTOMATICALLY attach to the next post you publish to LinkedIn. No tool call needed. When you publish, just confirm "with the image you sent" or similar — dont say "i cant attach images" because you can.`
+  : 'No image pending. If user asks to add an image to a post, tell them to send it on WhatsApp first.'}`
 
   // ─── Two-tier routing: cheap model for casual chat ────────────
   // For short, clearly-casual messages we try a Haiku call with no tools

@@ -26,6 +26,27 @@ export async function publishToLinkedIn(
   formData.append('account_id', user.unipile_account_id)
   formData.append('text', post!.content)
 
+  // Attach pending image if any (uploaded via WhatsApp before this publish)
+  // Image priority: post.image_url (post-specific) > user.pending_image_url (general pending)
+  const imageUrl = post?.image_url || user.pending_image_url
+  if (imageUrl) {
+    try {
+      const imgRes = await fetch(imageUrl, { signal: AbortSignal.timeout(15000) })
+      if (imgRes.ok) {
+        const buf = await imgRes.arrayBuffer()
+        const contentType = imgRes.headers.get('content-type') || 'image/jpeg'
+        const ext = contentType.includes('png') ? 'png' : contentType.includes('webp') ? 'webp' : 'jpg'
+        const blob = new Blob([buf], { type: contentType })
+        formData.append('attachments', blob, `image.${ext}`)
+        console.log(`[publishToLinkedIn] attached image (${buf.byteLength} bytes, ${contentType})`)
+      } else {
+        console.error(`[publishToLinkedIn] image fetch failed ${imgRes.status} for ${imageUrl}`)
+      }
+    } catch (err) {
+      console.error('[publishToLinkedIn] image attach error:', (err as Error).message)
+    }
+  }
+
   const res = await fetch(`${getEnv('UNIPILE_BASE_URL')}/api/v1/posts`, {
     method: 'POST',
     headers: { 'X-API-KEY': getEnv('UNIPILE_API_KEY') },
@@ -51,8 +72,16 @@ export async function publishToLinkedIn(
     await supabase.from('users').update({ pending_image_url: null }).eq('id', userId)
   }
 
+  // Save image_url on the published post for analytics/history
+  if (imageUrl && !post?.image_url) {
+    await supabase.from('posts').update({ image_url: imageUrl }).eq('id', postId)
+  }
+
   if (user.whatsapp_number) {
-    await sendWhatsApp(user.whatsapp_number, 'done, its live on LinkedIn. ill let you know when it picks up traction')
+    const msg = imageUrl
+      ? 'done, its live on LinkedIn with the image. ill let you know when it picks up traction'
+      : 'done, its live on LinkedIn. ill let you know when it picks up traction'
+    await sendWhatsApp(user.whatsapp_number, msg)
   }
 }
 
