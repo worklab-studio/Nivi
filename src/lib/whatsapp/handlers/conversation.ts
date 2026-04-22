@@ -2131,10 +2131,27 @@ ${(userData as { pending_image_url?: string } | null)?.pending_image_url
   // Extract memory async
   extractAndSaveMemory(userId, text, finalText).catch(() => {})
 
-  // ─── Send reply — always as a single message ─────────────────────
-  // No bubble splitting. One message per reply. Prevents duplicate feel
-  // and keeps the chat clean.
-  await sendWhatsApp(user.whatsapp_number, finalText, user.chatId)
+  // ─── Send reply — split into natural WhatsApp bubbles ──────────────
+  // Real humans send multiple short bubbles, not one wall of text.
+  // EXCEPT for actual post drafts (between --- markers or 400+ chars
+  // single-paragraph content) which should stay as one message.
+  const looksLikePostDraft =
+    /---[\s\S]*---/.test(finalText) ||
+    (finalText.length > 600 && !finalText.includes('\n\n'))
+
+  if (looksLikePostDraft) {
+    await sendWhatsApp(user.whatsapp_number, finalText, user.chatId)
+  } else {
+    const MAX_BUBBLES = 3
+    const TYPING_DELAY_MS = 700
+    const bubbles = splitIntoBubbles(finalText, MAX_BUBBLES)
+    for (let i = 0; i < bubbles.length; i++) {
+      await sendWhatsApp(user.whatsapp_number, bubbles[i], user.chatId)
+      if (i < bubbles.length - 1) {
+        await new Promise((r) => setTimeout(r, TYPING_DELAY_MS))
+      }
+    }
+  }
   return Response.json({ ok: true })
 }
 
