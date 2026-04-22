@@ -89,8 +89,12 @@ export function ChatPanel({
       fetch('/api/dashboard/identity')
         .then((r) => r.json())
         .then((d) => {
-          const auds = d.identity?.target_audiences ?? []
-          setAudiences(auds.map((a: { label: string } | string) => ({ label: typeof a === 'string' ? a : a.label })))
+          // brand_identity stores target_audience (singular) as either an array
+          // of {label, description} objects or strings.
+          const auds = d.identity?.target_audience ?? d.identity?.target_audiences ?? []
+          setAudiences(auds.map((a: { label?: string; name?: string } | string) => ({
+            label: typeof a === 'string' ? a : (a.label || a.name || 'Audience'),
+          })))
         })
         .catch(() => {})
     }
@@ -112,7 +116,15 @@ export function ChatPanel({
     if (showContextMenu && knowledgeSources.length === 0) {
       fetch('/api/dashboard/knowledge')
         .then((r) => r.json())
-        .then((d) => setKnowledgeSources((d.sources ?? []).map((s: { id: string; title: string }) => ({ id: s.id, title: s.title }))))
+        .then((d) => {
+          // /api/dashboard/knowledge returns { chunks: [...] } from knowledge_chunks table
+          // where the title field is `source_title`.
+          const items = d.chunks ?? d.sources ?? []
+          setKnowledgeSources(items.map((s: { id: string; source_title?: string; title?: string }) => ({
+            id: s.id,
+            title: s.source_title || s.title || 'Untitled',
+          })))
+        })
         .catch(() => {})
     }
   }, [showContextMenu, inspirations.length, knowledgeSources.length])

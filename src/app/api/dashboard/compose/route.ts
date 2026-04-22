@@ -81,6 +81,8 @@ export async function POST(req: Request) {
     templateId,
     knowledgeSourceId,
     inspirationId,
+    webSearch,
+    useIdentity,
   } = body
   const supabase = getSupabaseAdmin()
 
@@ -119,30 +121,38 @@ export async function POST(req: Request) {
     }
   }
 
-  // Fetch knowledge source if selected
+  // Fetch knowledge source if selected (from knowledge_chunks table)
   if (knowledgeSourceId) {
     const { data: src } = await supabase
-      .from('knowledge_sources')
-      .select('title, insights, raw_text')
+      .from('knowledge_chunks')
+      .select('source_title, source_type, raw_content, extracted_insights')
       .eq('id', knowledgeSourceId)
       .maybeSingle()
     if (src) {
-      const content = src.insights || src.raw_text?.slice(0, 1000) || ''
-      contextBlocks.push(`KNOWLEDGE CONTEXT from "${src.title}":\n${content}`)
+      const insights = src.extracted_insights
+        ? (typeof src.extracted_insights === 'string'
+            ? src.extracted_insights
+            : JSON.stringify(src.extracted_insights).slice(0, 1500))
+        : ''
+      const content = insights || src.raw_content?.slice(0, 1500) || ''
+      contextBlocks.push(`KNOWLEDGE CONTEXT from "${src.source_title || 'untitled'}" (${src.source_type || 'note'}):\n${content}`)
     }
   }
 
-  // Fetch inspiration post if selected
+  // Fetch inspiration post if selected (inspiration_posts.format, not hook_type)
   if (inspirationId) {
     const { data: post } = await supabase
       .from('inspiration_posts')
-      .select('content, author_name, topic_pillar, hook_type')
+      .select('content, author_name, topic_pillar, format, hook_score')
       .eq('id', inspirationId)
       .maybeSingle()
     if (post) {
-      contextBlocks.push(`INSPIRATION POST by ${post.author_name || 'Unknown'}${
-        post.hook_type ? ` (hook: ${post.hook_type})` : ''
-      }:\n"${post.content.slice(0, 500)}"`)
+      const meta: string[] = []
+      if (post.format) meta.push(`format: ${post.format}`)
+      if (post.topic_pillar) meta.push(`topic: ${post.topic_pillar}`)
+      if (post.hook_score) meta.push(`hook score: ${post.hook_score}/10`)
+      const metaStr = meta.length > 0 ? ` (${meta.join(', ')})` : ''
+      contextBlocks.push(`INSPIRATION POST by ${post.author_name || 'Unknown'}${metaStr}:\n"${post.content.slice(0, 600)}"`)
     }
   }
 
@@ -165,6 +175,65 @@ CRITICAL RULES FOR SECTION EDIT:
 - If the action is "custom": follow the user's specific instruction for this section only.
 `
       : ''
+
+  // useIdentity toggle: when explicitly turned OFF, prepend a note telling
+  // Nivi to ignore the user's stored identity/voice for THIS post.
+  if (useIdentity === false) {
+    contextBlocks.push(
+      'IDENTITY OVERRIDE: The user has turned OFF identity context for this post. Ignore their stored brand voice, About section, and content pillars. Treat this as a generic post the user wants drafted in a neutral voice.'
+    )
+  }
+
+  // Web search: do a pre-fetch via Anthropic's native web_search tool,
+  // then inject the results as context for the main compose call.
+  // This keeps the main compose call's tool definition simple (just update_draft).
+  if (webSearch && process.env.ANTHROPIC_API_KEY) {
+    try {
+      const searchRes = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'x-api-key': process.env.ANTHROPIC_API_KEY,
+          'anthropic-version': '2023-06-01',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-5',
+          max_tokens: 2048,
+          tools: [
+            {
+              type: 'web_search_20250305',
+              name: 'web_search',
+              max_uses: 3,
+            },
+          ],
+          messages: [
+            {
+              role: 'user',
+              content: `The user wants to write a LinkedIn post and asked me to use real-time web search for context. Their request: "${userMessage}"\n\nSearch the web for relevant, recent, factual information that would help write this post. Focus on stats, news, expert quotes, and trends from the last 30 days. Return ONLY the search findings as a concise summary (under 1000 words). No commentary, no post draft — just the facts and sources.`,
+            },
+          ],
+        }),
+        signal: AbortSignal.timeout(30_000),
+      })
+      if (searchRes.ok) {
+        const searchData = await searchRes.json()
+        const searchText = (searchData.content ?? [])
+          .filter((b: { type: string }) => b.type === 'text')
+          .map((b: { text: string }) => b.text)
+          .join('\n')
+        if (searchText) {
+          contextBlocks.push(
+            `WEB SEARCH RESULTS (current as of today):\n${searchText.slice(0, 3000)}\n\nUse these facts/stats/quotes to make the post specific and timely. Cite them naturally (e.g. "according to a recent report..."). Do NOT make up numbers or quotes beyond what's here.`
+          )
+          console.log(`[compose] web search added ${searchText.length} chars of context`)
+        }
+      } else {
+        console.error('[compose] web search failed:', searchRes.status, await searchRes.text().catch(() => ''))
+      }
+    } catch (err) {
+      console.error('[compose] web search error:', (err as Error).message)
+    }
+  }
 
   const extraContext = contextBlocks.length > 0
     ? `\n\n=== ADDITIONAL CONTEXT (selected by user) ===\n${contextBlocks.join('\n\n')}`
@@ -288,11 +357,17 @@ ${currentDraft || '(no draft yet — this is the first turn)'}`)
       contentLength: updatedDraft?.length ?? 0,
     })
   }
-  // Always track that a compose message was sent
+  // Always track that a compose message was sent (with feature usage flags)
   captureServerEvent(userId, 'compose_message_sent', {
     messageLength: userMessage.length,
     hasDraft: !!currentDraft,
     draftChanged: updatedDraft !== null,
+    usedTargetAudience: !!targetAudience,
+    usedTemplate: !!templateId,
+    usedKnowledge: !!knowledgeSourceId,
+    usedInspiration: !!inspirationId,
+    usedWebSearch: !!webSearch,
+    identityToggle: useIdentity !== false, // true unless explicitly off
   })
   void supabase.from('users').update({ last_active_at: new Date().toISOString() }).eq('id', userId)
 
