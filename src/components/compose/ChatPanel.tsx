@@ -9,11 +9,9 @@ import {
   Users,
   BookOpen,
   Globe,
-  Paperclip,
   Brain,
   Layers,
   UserCircle,
-  LayoutTemplate,
   X,
   Check,
 } from 'lucide-react'
@@ -59,7 +57,7 @@ export function ChatPanel({
   const [activeSubmenu, setActiveSubmenu] = useState<string | null>(null)
 
   // Data for submenus
-  const [audiences, setAudiences] = useState<{ label: string }[]>([])
+  const [audiences, setAudiences] = useState<{ label: string; description?: string }[]>([])
   const [templates, setTemplates] = useState<{ id: string; name: string }[]>([])
   const [inspirations, setInspirations] = useState<{ id: string; content: string; author_name: string }[]>([])
   const [knowledgeSources, setKnowledgeSources] = useState<{ id: string; title: string }[]>([])
@@ -83,51 +81,68 @@ export function ChatPanel({
     return () => document.removeEventListener('mousedown', handleClick)
   }, [])
 
-  // Fetch data when menus open
+  // Load all menu data on mount — avoids the "first open is empty" race
+  // condition where a slow fetch leaves the menu permanently empty for the
+  // session. Fires once when the chat panel renders.
   useEffect(() => {
-    if (showSettingsMenu && audiences.length === 0) {
-      fetch('/api/dashboard/identity')
-        .then((r) => r.json())
-        .then((d) => {
-          // brand_identity stores target_audience (singular) as either an array
-          // of {label, description} objects or strings.
-          const auds = d.identity?.target_audience ?? d.identity?.target_audiences ?? []
-          setAudiences(auds.map((a: { label?: string; name?: string } | string) => ({
-            label: typeof a === 'string' ? a : (a.label || a.name || 'Audience'),
-          })))
-        })
-        .catch(() => {})
-    }
-    if (showSettingsMenu && templates.length === 0) {
-      fetch('/api/dashboard/writing-style/templates')
-        .then((r) => r.json())
-        .then((d) => setTemplates((d.templates ?? []).map((t: { id: string; name: string }) => ({ id: t.id, name: t.name }))))
-        .catch(() => {})
-    }
-  }, [showSettingsMenu, audiences.length, templates.length])
+    // Identity (target audiences)
+    fetch('/api/dashboard/identity')
+      .then((r) => r.json())
+      .then((d) => {
+        const auds = d.identity?.target_audience ?? d.identity?.target_audiences ?? []
+        setAudiences(
+          auds.map((a: { label?: string; name?: string; description?: string } | string) =>
+            typeof a === 'string'
+              ? { label: a }
+              : { label: a.label || a.name || 'Audience', description: a.description }
+          )
+        )
+      })
+      .catch(() => {})
 
-  useEffect(() => {
-    if (showContextMenu && inspirations.length === 0) {
-      fetch('/api/dashboard/inspiration?limit=20')
-        .then((r) => r.json())
-        .then((d) => setInspirations((d.posts ?? []).slice(0, 15).map((p: { id: string; content: string; author_name: string }) => ({ id: p.id, content: p.content, author_name: p.author_name }))))
-        .catch(() => {})
-    }
-    if (showContextMenu && knowledgeSources.length === 0) {
-      fetch('/api/dashboard/knowledge')
-        .then((r) => r.json())
-        .then((d) => {
-          // /api/dashboard/knowledge returns { chunks: [...] } from knowledge_chunks table
-          // where the title field is `source_title`.
-          const items = d.chunks ?? d.sources ?? []
-          setKnowledgeSources(items.map((s: { id: string; source_title?: string; title?: string }) => ({
+    // Writing style templates (curated + user's own)
+    fetch('/api/dashboard/writing-style/templates')
+      .then((r) => r.json())
+      .then((d) =>
+        setTemplates(
+          (d.templates ?? []).map((t: { id: string; name: string }) => ({
+            id: t.id,
+            name: t.name,
+          }))
+        )
+      )
+      .catch(() => {})
+
+    // Inspiration posts (latest 20, slice 15)
+    fetch('/api/dashboard/inspiration?limit=20')
+      .then((r) => r.json())
+      .then((d) =>
+        setInspirations(
+          (d.posts ?? [])
+            .slice(0, 15)
+            .map((p: { id: string; content: string; author_name: string }) => ({
+              id: p.id,
+              content: p.content,
+              author_name: p.author_name,
+            }))
+        )
+      )
+      .catch(() => {})
+
+    // Knowledge sources (knowledge_chunks table; title field is source_title)
+    fetch('/api/dashboard/knowledge')
+      .then((r) => r.json())
+      .then((d) => {
+        const items = d.chunks ?? d.sources ?? []
+        setKnowledgeSources(
+          items.map((s: { id: string; source_title?: string; title?: string }) => ({
             id: s.id,
             title: s.source_title || s.title || 'Untitled',
-          })))
-        })
-        .catch(() => {})
-    }
-  }, [showContextMenu, inspirations.length, knowledgeSources.length])
+          }))
+        )
+      })
+      .catch(() => {})
+  }, [])
 
   // Auto-scroll to bottom on new message
   useEffect(() => {
@@ -291,7 +306,7 @@ export function ChatPanel({
 
         {/* Bottom toolbar: context + settings buttons */}
         <div className="flex items-center gap-1">
-          {/* Context menu (+ button): Upload, Knowledge, Inspiration, Identity, Templates */}
+          {/* Context menu (+ button): Knowledge, Inspiration, Identity */}
           <div className="relative" ref={contextMenuRef}>
             <button
               type="button"
@@ -391,42 +406,6 @@ export function ChatPanel({
                   </span>
                   {context.identityContext && <Check size={14} className="text-primary" />}
                 </button>
-
-                {/* Templates */}
-                <button
-                  type="button"
-                  onClick={() => setActiveSubmenu(activeSubmenu === 'templates' ? null : 'templates')}
-                  className="w-full flex items-center justify-between gap-2 px-3 py-2.5 text-[13px] text-foreground hover:bg-accent transition-colors"
-                >
-                  <span className="flex items-center gap-2.5">
-                    <LayoutTemplate size={15} className="text-muted-foreground" />
-                    My templates
-                  </span>
-                  <span className="text-muted-foreground text-[10px]">›</span>
-                </button>
-
-                {activeSubmenu === 'templates' && (
-                  <div className="border-t border-border max-h-[200px] overflow-y-auto">
-                    {templates.length === 0 ? (
-                      <p className="px-3 py-2 text-[11px] text-muted-foreground">No templates yet</p>
-                    ) : templates.map((t) => (
-                      <button
-                        key={t.id}
-                        type="button"
-                        onClick={() => {
-                          setContext((p) => ({ ...p, template: t.id, templateName: t.name }))
-                          setShowContextMenu(false)
-                          setActiveSubmenu(null)
-                        }}
-                        className={`w-full text-left px-4 py-2 text-[12px] hover:bg-accent transition-colors ${
-                          context.template === t.id ? 'text-primary font-medium' : 'text-foreground'
-                        }`}
-                      >
-                        {t.name}
-                      </button>
-                    ))}
-                  </div>
-                )}
               </div>
             )}
           </div>
@@ -486,11 +465,15 @@ export function ChatPanel({
                               setShowSettingsMenu(false)
                               setActiveSubmenu(null)
                             }}
-                            className={`w-full text-left px-4 py-2 text-[12px] hover:bg-accent transition-colors ${
+                            className={`w-full text-left px-4 py-2 hover:bg-accent transition-colors ${
                               context.audience === a.label ? 'text-primary font-medium' : 'text-foreground'
                             }`}
+                            title={a.description}
                           >
-                            {a.label}
+                            <div className="text-[12px] leading-tight">{a.label}</div>
+                            {a.description && (
+                              <div className="text-[10px] text-muted-foreground mt-0.5 line-clamp-1">{a.description}</div>
+                            )}
                           </button>
                         ))}
                       </>
