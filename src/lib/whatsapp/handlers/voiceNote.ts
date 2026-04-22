@@ -1,30 +1,27 @@
 import { getSupabaseAdmin } from '@/lib/supabase/admin'
 import { getEnv } from '@/lib/config'
-import { generateDailyPost } from '@/lib/claude/generatePost'
 import { sendWhatsApp } from '@/lib/whatsapp/send'
 
 /**
- * Transcribe a WhatsApp voice note via Gemini 2.5 Flash
- * and generate a post from the transcript.
+ * Transcribe a WhatsApp voice note via Gemini 2.5 Flash,
+ * then route the transcript through handleConversation so Nivi
+ * replies based on intent (chat, post draft, tool call, etc.) —
+ * not always as a post draft.
  */
 export async function handleVoiceNote(
   userId: string,
   audioId: string,
-  messageId?: string
+  messageId?: string,
+  chatId?: string
 ): Promise<void> {
   const supabase = getSupabaseAdmin()
   const { data: user } = await supabase
     .from('users')
-    .select('whatsapp_number')
+    .select('id, name, whatsapp_number, unipile_account_id, timezone, niche, plan, streak_count, onboarding_complete')
     .eq('id', userId)
     .single()
 
   if (!user?.whatsapp_number) return
-
-  await sendWhatsApp(
-    user.whatsapp_number,
-    '🎤 got your voice note. transcribing now...'
-  )
 
   // Download audio via Unipile
   let audioBuffer: ArrayBuffer
@@ -39,14 +36,14 @@ export async function handleVoiceNote(
     })
     if (!audioRes.ok) {
       console.error('[voiceNote] download failed:', audioRes.status)
-      await sendWhatsApp(user.whatsapp_number, 'couldnt download the voice note, try again?')
+      await sendWhatsApp(user.whatsapp_number, 'couldnt download the voice note, try again?', chatId)
       return
     }
     audioBuffer = await audioRes.arrayBuffer()
     mimeType = audioRes.headers.get('content-type') ?? 'audio/ogg'
   } catch (err) {
     console.error('[voiceNote] download error:', err)
-    await sendWhatsApp(user.whatsapp_number, 'couldnt download the voice note, try again?')
+    await sendWhatsApp(user.whatsapp_number, 'couldnt download the voice note, try again?', chatId)
     return
   }
 
@@ -55,30 +52,24 @@ export async function handleVoiceNote(
   const transcript = await transcribeWithGemini(base64, mimeType)
 
   if (!transcript) {
-    await sendWhatsApp(user.whatsapp_number, 'couldnt understand that voice note. try typing it or send another?')
+    await sendWhatsApp(user.whatsapp_number, 'couldnt understand that voice note. try typing it or send another?', chatId)
     return
   }
 
-  // Save transcript as conversation
-  await supabase.from('conversations').insert({
-    user_id: userId,
-    role: 'user',
-    content: `[voice note] ${transcript}`,
-  })
+  console.log(`[voiceNote] transcribed for ${user.name}: "${transcript.slice(0, 80)}"`)
 
-  // Generate post from transcript
-  try {
-    const post = await generateDailyPost(userId, transcript)
-    await sendWhatsApp(
-      user.whatsapp_number,
-      `here's your post from the voice note:\n\n${post.content}\n\nreply POST to publish, EDIT to change, or SKIP`
-    )
-  } catch {
-    await sendWhatsApp(
-      user.whatsapp_number,
-      `transcribed your voice note:\n\n"${transcript}"\n\nwant me to turn this into a post?`
-    )
+  // Route through conversation handler — Nivi figures out intent and replies naturally
+  const { handleConversation } = await import('@/lib/whatsapp/handlers/conversation')
+  const fullUser = {
+    ...user,
+    chatId: chatId ?? '',
+    timezone: user.timezone || 'Asia/Kolkata',
+    niche: user.niche || null,
+    plan: user.plan || 'free',
+    streak_count: user.streak_count || 0,
+    onboarding_complete: user.onboarding_complete ?? true,
   }
+  await handleConversation(userId, fullUser, `[voice note transcript] ${transcript}`)
 }
 
 /**

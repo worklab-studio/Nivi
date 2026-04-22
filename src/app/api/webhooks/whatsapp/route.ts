@@ -192,7 +192,7 @@ async function processMessage(
       (attachments[0]?.id as string) ??
       ''
     if (audioId) {
-      await handleVoiceNote(userId, audioId)
+      await handleVoiceNote(userId, audioId, webhookMessageId, chatId)
       return
     }
   }

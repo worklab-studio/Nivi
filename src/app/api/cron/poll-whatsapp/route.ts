@@ -132,10 +132,10 @@ export async function GET(req: Request) {
         // Collect all new unprocessed messages from this user into one batch
         const newTexts: string[] = []
         const newMsgIds: string[] = []
+        const audioMsgs: { id: string; audioId: string }[] = []
 
         for (const msg of messages) {
           if (msg.is_sender) continue
-          if (!msg.text?.trim()) continue
           if (processedIds.has(msg.id)) continue
 
           const msgTime = msg.timestamp ? new Date(msg.timestamp).getTime() : 0
@@ -152,8 +152,68 @@ export async function GET(req: Request) {
             .limit(1)
           if (alreadyProcessed && alreadyProcessed.length > 0) continue
 
+          // Detect voice note: message_type 'audio' OR audio attachment
+          const isAudio =
+            msg.message_type === 'audio' ||
+            msg.type === 'audio' ||
+            (Array.isArray(msg.attachments) && msg.attachments.some((a: { type?: string; mime_type?: string }) =>
+              a.type?.includes('audio') || a.mime_type?.includes('audio')
+            ))
+
+          if (isAudio) {
+            const audioAtt = (msg.attachments ?? []).find((a: { type?: string; mime_type?: string }) =>
+              a.type?.includes('audio') || a.mime_type?.includes('audio')
+            )
+            const audioId =
+              (audioAtt?.id as string) ??
+              (audioAtt?.attachment_id as string) ??
+              (msg.attachment_id as string) ??
+              ''
+            if (audioId) {
+              audioMsgs.push({ id: msg.id, audioId })
+            }
+            continue
+          }
+
+          if (!msg.text?.trim()) continue
+
           newTexts.push(msg.text.trim())
           newMsgIds.push(msg.id)
+        }
+
+        // Process audio messages first — each goes through transcription + handleConversation
+        for (const audio of audioMsgs) {
+          // Mark processed BEFORE handling
+          await supabase.from('user_memory').insert({
+            user_id: user.id,
+            fact: `wa_msg_${audio.id}`,
+            category: 'poll_dedup',
+            source: 'system',
+          })
+          processedIds.add(audio.id)
+
+          // Atomic lock for audio path too
+          const thirtySecsAgo = new Date(Date.now() - 30000).toISOString()
+          const { data: audioLock } = await supabase
+            .from('users')
+            .update({ last_active_at: new Date().toISOString() })
+            .eq('id', user.id)
+            .or(`last_active_at.is.null,last_active_at.lt.${thirtySecsAgo}`)
+            .select('id')
+
+          if (!audioLock || audioLock.length === 0) {
+            console.log(`[poll-wa] skipping audio for ${phone} — locked`)
+            continue
+          }
+
+          try {
+            const { handleVoiceNote } = await import('@/lib/whatsapp/handlers/voiceNote')
+            await handleVoiceNote(user.id, audio.audioId, audio.id, chat.id)
+            totalProcessed++
+            console.log(`[poll-wa] handled voice note for ${phone}`)
+          } catch (err) {
+            console.error('[poll-wa] voice note error:', (err as Error).message)
+          }
         }
 
         // Nothing new from this user
