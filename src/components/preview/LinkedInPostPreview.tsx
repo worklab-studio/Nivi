@@ -286,18 +286,22 @@ export function LinkedInPostPreview({
           )}
         </div>
 
-        {/* Engagement counts */}
+        {/* Engagement counts — LinkedIn style with proper reaction icons */}
         <div
           className="flex items-center justify-between text-[12px] text-muted-foreground border-b border-border"
-          style={{ padding: '4px 16px 8px 16px' }}
+          style={{ padding: '8px 16px' }}
         >
-          <div className="flex items-center gap-1">
-            <span style={{ fontSize: 14 }}>👍❤️🎉</span>
-            <span>—</span>
+          <div className="flex items-center gap-1.5">
+            <div className="flex items-center -space-x-1">
+              <ReactionIcon type="like" />
+              <ReactionIcon type="celebrate" />
+              <ReactionIcon type="love" />
+            </div>
+            <span className="ml-1">Be the first to react</span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <span>0 comments</span>
-            <span aria-hidden>•</span>
+            <span aria-hidden className="text-border">•</span>
             <span>0 reposts</span>
           </div>
         </div>
@@ -306,6 +310,47 @@ export function LinkedInPostPreview({
           <LinkedInEngagementBar />
         </div>
       </article>
+    </div>
+  )
+}
+
+/**
+ * Mini reaction icons matching LinkedIn's actual style.
+ * SVG circles with the icon inside — no emojis.
+ */
+function ReactionIcon({ type }: { type: 'like' | 'celebrate' | 'love' }) {
+  const config = {
+    like: { bg: '#0A66C2', label: 'Like' },
+    celebrate: { bg: '#6DAE4F', label: 'Celebrate' },
+    love: { bg: '#DF704D', label: 'Love' },
+  }[type]
+
+  return (
+    <div
+      className="flex items-center justify-center rounded-full"
+      style={{
+        width: 16,
+        height: 16,
+        background: config.bg,
+        border: '1.5px solid hsl(var(--card))',
+      }}
+      aria-label={config.label}
+    >
+      {type === 'like' && (
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="white">
+          <path d="M2 21h4V9H2v12zm20-11c0-1.1-.9-2-2-2h-6.31l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L13.17 1 7.59 6.59C7.22 6.95 7 7.45 7 8v10c0 1.1.9 2 2 2h9c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-1z" />
+        </svg>
+      )}
+      {type === 'celebrate' && (
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="white">
+          <path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm3.44-11.56l-1.06 2.31L12 12l2.39 1.06 1.06 2.31 1.05-2.31L19 12l-2.5-1.25-1.06-2.31zM7 12l1.5-3.25L12 7.5 8.5 6 7 2.75 5.5 6 2 7.5l3.5 1.25z" />
+        </svg>
+      )}
+      {type === 'love' && (
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="white">
+          <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+        </svg>
+      )}
     </div>
   )
 }
