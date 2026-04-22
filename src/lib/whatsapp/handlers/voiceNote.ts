@@ -69,7 +69,11 @@ export async function handleVoiceNote(
     streak_count: user.streak_count || 0,
     onboarding_complete: user.onboarding_complete ?? true,
   }
-  await handleConversation(userId, fullUser, `[voice note transcript] ${transcript}`)
+  // Pass the transcript as the user's message — no prefix, no meta-tagging.
+  // Nivi treats it identically to a typed message and replies naturally.
+  // This fixes confusion where she'd say "i didnt get the audio" or refer
+  // to the transcript prefix instead of just responding to the content.
+  await handleConversation(userId, fullUser, transcript)
 }
 
 /**
