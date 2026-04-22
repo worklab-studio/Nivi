@@ -425,25 +425,66 @@ async function executeTool(
   switch (toolName) {
     case 'publish_linkedin_post': {
       const text = input.text as string
-      // Unipile requires multipart form data for posts
+
+      // Check for pending image (from a recent WhatsApp upload)
+      const { data: u } = await supabase
+        .from('users')
+        .select('pending_image_url')
+        .eq('id', userId)
+        .single()
+      const pendingImageUrl = u?.pending_image_url as string | null
+
+      // Build multipart with image attached if present
       const formData = new FormData()
       formData.append('account_id', accountId)
       formData.append('text', text)
+
+      let imageAttached = false
+      if (pendingImageUrl) {
+        try {
+          const imgRes = await fetch(pendingImageUrl, { signal: AbortSignal.timeout(15000) })
+          if (imgRes.ok) {
+            const buf = await imgRes.arrayBuffer()
+            const contentType = imgRes.headers.get('content-type') || 'image/jpeg'
+            const ext = contentType.includes('png') ? 'png' : contentType.includes('webp') ? 'webp' : 'jpg'
+            const blob = new Blob([buf], { type: contentType })
+            formData.append('attachments', blob, `image.${ext}`)
+            imageAttached = true
+            console.log(`[Nivi Tool publish] attached image (${buf.byteLength} bytes)`)
+          } else {
+            console.error(`[Nivi Tool publish] image fetch failed ${imgRes.status}`)
+          }
+        } catch (err) {
+          console.error('[Nivi Tool publish] image attach error:', (err as Error).message)
+        }
+      }
+
       const res = await fetch(`${baseUrl}/api/v1/posts`, {
         method: 'POST',
         headers: { 'X-API-KEY': apiKey },
         body: formData,
       })
       const data = await res.json()
+
       if (res.ok) {
+        // Insert the post with image_url so dashboard shows it
         await supabase.from('posts').insert({
           user_id: userId,
           content: text,
           status: 'published',
           published_at: new Date().toISOString(),
           linkedin_post_id: data.post_id ?? data.id,
+          image_url: imageAttached ? pendingImageUrl : null,
         })
-        return `Post published! ID: ${data.post_id ?? data.id}`
+
+        // Clear pending image so it doesn't re-attach on next post
+        if (imageAttached) {
+          await supabase.from('users').update({ pending_image_url: null }).eq('id', userId)
+        }
+
+        return imageAttached
+          ? `Post published with image! ID: ${data.post_id ?? data.id}. Tell user the image is included.`
+          : `Post published! ID: ${data.post_id ?? data.id}`
       }
       return `Failed to post: ${data.message ?? JSON.stringify(data).slice(0, 100)}`
     }
@@ -1232,7 +1273,15 @@ You now have the full profile. Use this to rewrite their bio, headline, or About
       if (!scheduledAt) return 'when should i schedule it? give me a date and time.'
 
       try {
-        // Create the post as draft
+        // Check for pending image — attach to scheduled post so cron uses it
+        const { data: u } = await supabase
+          .from('users')
+          .select('pending_image_url')
+          .eq('id', userId)
+          .single()
+        const pendingImageUrl = u?.pending_image_url as string | null
+
+        // Create the post as draft (include image_url so cron picks it up)
         const { data: post } = await supabase
           .from('posts')
           .insert({
@@ -1240,9 +1289,15 @@ You now have the full profile. Use this to rewrite their bio, headline, or About
             content: text,
             status: 'scheduled',
             scheduled_at: scheduledAt,
+            image_url: pendingImageUrl,
           })
           .select('id')
           .single()
+
+        // Clear pending image — locked to this scheduled post
+        if (pendingImageUrl) {
+          await supabase.from('users').update({ pending_image_url: null }).eq('id', userId)
+        }
 
         if (!post) return 'failed to create the post. try again?'
 
