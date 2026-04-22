@@ -56,15 +56,17 @@ export async function syncLinkedInAnalytics(
   // Step 3: Get existing posts to match by linkedin_post_id or content hash
   const { data: existingPosts } = await supabase
     .from('posts')
-    .select('id, linkedin_post_id, content')
+    .select('id, linkedin_post_id, content, image_url')
     .eq('user_id', userId)
 
   const existingByLiId = new Map<string, string>()
   const existingByContent = new Map<string, string>()
+  const existingHasImage = new Set<string>()
 
   for (const p of existingPosts ?? []) {
     if (p.linkedin_post_id) existingByLiId.set(p.linkedin_post_id, p.id)
     if (p.content) existingByContent.set(p.content.slice(0, 100).toLowerCase().trim(), p.id)
+    if (p.image_url) existingHasImage.add(p.id)
   }
 
   // === BULK APPROACH ===
@@ -102,6 +104,7 @@ export async function syncLinkedInAnalytics(
       linkedin_post_id: v.liPost.id,
       status: 'published',
       published_at: pubDate,
+      image_url: v.liPost.imageUrl ?? null,
     }
   })
 
@@ -124,6 +127,19 @@ export async function syncLinkedInAnalytics(
         }
       }
     }
+  }
+
+  // ─── Backfill image_url on existing posts that don't have one ───
+  // Bulk update: posts whose LinkedIn data has an image but our DB row doesn't
+  const imageBackfills = validPosts
+    .filter((v) => v.existingId && v.liPost.imageUrl && !existingHasImage.has(v.existingId))
+    .map((v) => ({ id: v.existingId!, image_url: v.liPost.imageUrl! }))
+
+  for (const row of imageBackfills) {
+    await supabase.from('posts').update({ image_url: row.image_url }).eq('id', row.id)
+  }
+  if (imageBackfills.length > 0) {
+    console.log(`[syncAnalytics] backfilled ${imageBackfills.length} image URLs`)
   }
 
   // ─── Bulk upsert analytics ───

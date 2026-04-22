@@ -73,6 +73,17 @@ export function PostLinkedInView({
               </p>
             </div>
 
+            {/* Image (LinkedIn-style full-width below text) */}
+            {post.image_url && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={post.image_url}
+                alt=""
+                loading="lazy"
+                className="w-full max-h-[480px] object-cover border-t border-border"
+              />
+            )}
+
             {/* Engagement bar */}
             {isPublished && (post.impressions > 0 || post.likes > 0) && (
               <div className="px-4 py-2 text-[11px] text-muted-foreground flex items-center gap-3">

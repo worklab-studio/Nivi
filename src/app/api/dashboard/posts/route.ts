@@ -8,7 +8,7 @@ export async function GET() {
   const supabase = getSupabaseAdmin()
   const { data } = await supabase
     .from('posts')
-    .select('id, content, hook_type, content_pillar, status, created_at, published_at, post_analytics(impressions, likes, comments, engagement_rate)')
+    .select('id, content, hook_type, content_pillar, status, created_at, published_at, image_url, post_analytics(impressions, likes, comments, engagement_rate)')
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
     .limit(100)

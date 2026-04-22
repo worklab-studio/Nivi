@@ -13,6 +13,7 @@ export interface Post {
   status: string
   created_at: string
   published_at: string | null
+  image_url: string | null
   impressions: number
   likes: number
   comments: number
@@ -63,6 +64,17 @@ export function PostCard({
       >
         {post.content}
       </p>
+
+      {/* Image preview */}
+      {post.image_url && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={post.image_url}
+          alt=""
+          loading="lazy"
+          className="mt-3 w-full max-h-48 object-cover rounded-lg border border-border"
+        />
+      )}
 
       {/* Meta row */}
       <div className="flex items-center gap-2 mt-3 flex-wrap">

@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
   const supabase = getSupabaseAdmin()
   let query = supabase
     .from('posts')
-    .select('id, content, status, hook_type, content_pillar, scheduled_at, published_at, created_at, post_analytics(impressions, likes, comments)')
+    .select('id, content, status, hook_type, content_pillar, scheduled_at, published_at, created_at, image_url, post_analytics(impressions, likes, comments)')
     .eq('user_id', userId)
     .order('scheduled_at', { ascending: true })
 

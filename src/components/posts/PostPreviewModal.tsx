@@ -128,6 +128,14 @@ export function PostPreviewModal({
             <p className="text-[14px] text-foreground leading-[1.65] whitespace-pre-line">
               {post.content}
             </p>
+            {post.image_url && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={post.image_url}
+                alt=""
+                className="mt-4 w-full rounded-lg border border-border"
+              />
+            )}
           </div>
 
           {/* Engagement stats (published only) */}

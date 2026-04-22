@@ -8,6 +8,28 @@ const headers = {
   accept: 'application/json',
 }
 
+/**
+ * Extract first image URL from a Unipile post's attachments array.
+ * Unipile uses different field names depending on attachment type — try several.
+ */
+function extractImageUrl(attachments?: unknown[]): string | undefined {
+  if (!Array.isArray(attachments) || attachments.length === 0) return undefined
+  for (const att of attachments) {
+    const a = att as { type?: string; mime_type?: string; url?: string; image_url?: string; src?: string; thumbnail_url?: string; large_url?: string; medium_url?: string }
+    const isImage =
+      a.type?.includes('image') ||
+      a.type === 'img' ||
+      a.mime_type?.includes('image')
+    if (isImage) {
+      const url = a.url || a.image_url || a.large_url || a.medium_url || a.src || a.thumbnail_url
+      if (url) return url
+    }
+  }
+  // Some Unipile responses don't tag the type — fall back to the first URL we find
+  const first = attachments[0] as { url?: string; image_url?: string; large_url?: string; medium_url?: string; src?: string; thumbnail_url?: string }
+  return first?.url || first?.image_url || first?.large_url || first?.medium_url || first?.src || first?.thumbnail_url
+}
+
 export interface LinkedInPost {
   id: string
   text: string
@@ -18,6 +40,8 @@ export interface LinkedInPost {
   reposts: number
   shareUrl: string
   hasImage: boolean
+  imageUrl?: string
+  authorName?: string
 }
 
 export interface LinkedInProfile {
@@ -203,6 +227,7 @@ export async function getMyRecentPosts(
         reposts: p.repost_counter ?? 0,
         shareUrl: p.share_url ?? '',
         hasImage: (p.attachments ?? []).length > 0,
+        imageUrl: extractImageUrl(p.attachments),
       })
     )
   } catch {
