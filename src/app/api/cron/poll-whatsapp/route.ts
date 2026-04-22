@@ -270,7 +270,16 @@ export async function GET(req: Request) {
             messageCount: newTexts.length,
           })
 
-          await handleConversation(user.id, fullUser, combinedText)
+          // If message contains a URL, route through URL handler (Jina Reader fetch)
+          // so Nivi has the page content as context. handleUrlInMessage calls
+          // handleConversation internally with rich page content.
+          const urlMatch = combinedText.match(/https?:\/\/[^\s]+/i)
+          if (urlMatch) {
+            const { handleUrlInMessage } = await import('@/lib/whatsapp/handlers/media')
+            await handleUrlInMessage(user.id, fullUser, combinedText, urlMatch[0])
+          } else {
+            await handleConversation(user.id, fullUser, combinedText)
+          }
           totalProcessed++
 
           // Track Nivi's reply (handleConversation sends one message)

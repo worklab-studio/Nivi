@@ -228,7 +228,8 @@ async function extractTextFromDoc(
 }
 
 /**
- * Handle URLs sent in messages — fetch page and feed to Nivi
+ * Handle URLs sent in messages — fetch page (via Jina Reader for SPAs/JS sites)
+ * and feed to Nivi as context. Special-cased for YouTube to extract video info.
  */
 export async function handleUrlInMessage(
   userId: string,
@@ -236,34 +237,88 @@ export async function handleUrlInMessage(
   text: string,
   url: string
 ): Promise<void> {
+  // Detect YouTube URLs — use Jina with the watch page (returns title, description, transcript)
+  const isYouTube = /(?:youtube\.com\/watch|youtu\.be\/|youtube\.com\/shorts)/i.test(url)
+  const isPdf = /\.pdf(\?|$)/i.test(url)
+
+  let pageContent = ''
+  let sourceLabel = 'URL'
+  if (isYouTube) sourceLabel = 'YouTube video'
+  else if (isPdf) sourceLabel = 'PDF link'
+  else if (/\.(jpg|jpeg|png|gif|webp)(\?|$)/i.test(url)) sourceLabel = 'image link'
+
+  // Try Jina Reader first — handles SPAs, JS-rendered content, paywalls better than raw fetch
+  // Returns clean markdown of the page including title, headings, body text
   try {
-    const res = await fetch(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (Nivi Assistant)' },
-      signal: AbortSignal.timeout(10000),
+    const jinaUrl = `https://r.jina.ai/${url}`
+    const res = await fetch(jinaUrl, {
+      headers: {
+        'Accept': 'text/plain',
+        // X-Return-Format: markdown gives best signal-to-noise
+        'X-Return-Format': 'markdown',
+      },
+      signal: AbortSignal.timeout(20000),
     })
-    if (!res.ok) {
-      await handleConversation(userId, user, text)
-      return
+    if (res.ok) {
+      pageContent = (await res.text()).trim()
+      console.log(`[handleUrl] jina ${url} → ${pageContent.length} chars`)
+    } else {
+      console.log(`[handleUrl] jina returned ${res.status} for ${url}`)
     }
-
-    const html = await res.text()
-    // Simple text extraction — strip HTML tags
-    const pageText = html
-      .replace(/<script[\s\S]*?<\/script>/gi, '')
-      .replace(/<style[\s\S]*?<\/style>/gi, '')
-      .replace(/<[^>]+>/g, ' ')
-      .replace(/&nbsp;/g, ' ')
-      .replace(/&amp;/g, '&')
-      .replace(/\s+/g, ' ')
-      .trim()
-      .slice(0, 4000)
-
-    const contextualMessage = `[user shared a URL: ${url}]\nUser said: "${text}"\nPage content: ${pageText}`
-    await handleConversation(userId, user, contextualMessage)
-  } catch {
-    // URL fetch failed, just process the message normally
-    await handleConversation(userId, user, text)
+  } catch (err) {
+    console.error('[handleUrl] jina threw:', (err as Error).message)
   }
+
+  // Fallback: raw fetch + HTML strip if Jina failed or returned nothing useful
+  if (!pageContent || pageContent.length < 100) {
+    try {
+      const res = await fetch(url, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (Nivi Assistant)' },
+        signal: AbortSignal.timeout(10000),
+      })
+      if (res.ok) {
+        const html = await res.text()
+        pageContent = html
+          .replace(/<script[\s\S]*?<\/script>/gi, '')
+          .replace(/<style[\s\S]*?<\/style>/gi, '')
+          .replace(/<[^>]+>/g, ' ')
+          .replace(/&nbsp;/g, ' ')
+          .replace(/&amp;/g, '&')
+          .replace(/\s+/g, ' ')
+          .trim()
+        console.log(`[handleUrl] fallback raw fetch ${url} → ${pageContent.length} chars`)
+      }
+    } catch {
+      // Both methods failed
+    }
+  }
+
+  // Cap content to avoid token bloat (~6000 chars ≈ 1500 tokens, leaves headroom)
+  if (pageContent.length > 6000) {
+    pageContent = pageContent.slice(0, 6000) + '\n\n[content truncated]'
+  }
+
+  if (!pageContent) {
+    // Couldn't fetch — let Nivi reply naturally (she'll say she couldn't read it)
+    const contextualMessage = `[user shared a ${sourceLabel}: ${url}]\nUser said: "${text}"\n[NOTE: Couldn't fetch the page content. Acknowledge the link and ask the user what they want to say about it, or ask them to paste key points.]`
+    await handleConversation(userId, user, contextualMessage)
+    return
+  }
+
+  // Build rich context for Nivi
+  const contextualMessage = `[user shared a ${sourceLabel}: ${url}]
+User said: "${text}"
+
+=== PAGE CONTENT ===
+${pageContent}
+=== END CONTENT ===
+
+INSTRUCTIONS:
+- If the user asked you to "draft a post about this" / "write a post" / "make a linkedin post" → write the full LinkedIn post inspired by this content. Use the user's voice. Reference specific insights from the content.
+- If they're asking your opinion on it → give a sharp take
+- If they shared without context → briefly summarize what it's about (1-2 lines) and ask if they want a post drafted from it
+- Always make the post original, not a copy of the source content`
+  await handleConversation(userId, user, contextualMessage)
 }
 
 function detectMimeType(attachment: MediaAttachment): string {
