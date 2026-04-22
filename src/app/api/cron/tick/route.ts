@@ -97,24 +97,38 @@ export async function GET(req: Request) {
     }
   } catch { /* skip */ }
 
-  // === 3. LINKEDIN ANALYTICS SYNC (once daily, all users with LinkedIn) ===
+  // === 3. LINKEDIN ANALYTICS SYNC (once daily, paid users only at 3 AM UTC) ===
+  // Free trial users get analytics synced immediately on LinkedIn connect.
+  // After that, only paid users get daily refresh to keep the cron fast.
   try {
     const { data: users } = await supabase
       .from('users')
       .select('id, unipile_account_id')
       .not('unipile_account_id', 'is', null)
-      .limit(50)
+      .in('plan', ['dashboard', 'complete'])
+      .limit(20)
 
-    // Only run between 3-4 AM UTC to avoid duplicate runs
     const hour = now.getUTCHours()
     if (hour === 3) {
+      const cronStart = Date.now()
       for (const u of users ?? []) {
+        // Stop if we're approaching the 60s timeout (leave 10s buffer)
+        if (Date.now() - cronStart > 50_000) {
+          results.push(`stopped early at user ${u.id} (timeout buffer)`)
+          break
+        }
         try {
           const { syncLinkedInAnalytics } = await import('@/lib/unipile/syncAnalytics')
-          const result = await syncLinkedInAnalytics(u.id)
+          // Per-user timeout: 8s max
+          const result = await Promise.race([
+            syncLinkedInAnalytics(u.id),
+            new Promise<{ synced: number; created: number }>((_, rej) =>
+              setTimeout(() => rej(new Error('per-user timeout')), 8000)
+            ),
+          ])
           results.push(`analytics synced for ${u.id}: ${result.synced} posts`)
-        } catch {
-          // skip failed syncs
+        } catch (err) {
+          results.push(`sync failed for ${u.id}: ${(err as Error).message}`)
         }
       }
     }

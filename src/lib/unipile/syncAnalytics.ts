@@ -67,98 +67,90 @@ export async function syncLinkedInAnalytics(
     if (p.content) existingByContent.set(p.content.slice(0, 100).toLowerCase().trim(), p.id)
   }
 
-  let synced = 0
-  let created = 0
+  // === BULK APPROACH ===
+  // 1. Filter LI posts: skip empty/short and 0-engagement
+  // 2. Split into "needs create" vs "exists in DB"
+  // 3. Bulk insert new posts (1 query)
+  // 4. Bulk upsert analytics (1 query)
+  // Reduces ~3N queries to ~3 total queries regardless of post count
 
-  for (const liPost of liPosts) {
-    if (!liPost.text || liPost.text.length < 20) continue
-    // Skip reposts/shares (Unipile returns them with 0 impressions or very short text)
-    if (liPost.impressions === 0 && liPost.likes === 0 && liPost.comments === 0) continue
-
-    const contentKey = liPost.text.slice(0, 100).toLowerCase().trim()
-
-    // Find matching post in DB
-    let postId = existingByLiId.get(liPost.id) ?? existingByContent.get(contentKey)
-
-    if (!postId) {
-      // Double-check: query DB directly to avoid race conditions
-      const { data: existCheck } = await supabase
-        .from('posts')
-        .select('id')
-        .eq('user_id', userId)
-        .ilike('content', contentKey.slice(0, 50) + '%')
-        .limit(1)
-
-      if (existCheck && existCheck.length > 0) {
-        postId = existCheck[0].id
-      } else {
-        // Create a new post entry for this LinkedIn-only post
-        let pubDate = new Date().toISOString()
-        try {
-          const d = new Date(liPost.date)
-          if (!isNaN(d.getTime())) pubDate = d.toISOString()
-        } catch { /* use current date */ }
-
-        const { data: inserted } = await supabase
-          .from('posts')
-          .insert({
-            user_id: userId,
-            content: liPost.text,
-            linkedin_post_id: liPost.id,
-            status: 'published',
-            published_at: pubDate,
-          })
-        .select('id')
-        .single()
-
-        if (inserted) {
-          postId = inserted.id
-          existingByLiId.set(liPost.id, postId!)
-          existingByContent.set(contentKey, postId!)
-          created++
-        }
-      }
-    } else {
-      // Update linkedin_post_id if not set
-      await supabase
-        .from('posts')
-        .update({ linkedin_post_id: liPost.id })
-        .eq('id', postId)
-        .is('linkedin_post_id', null)
-    }
-
-    if (!postId) continue
-
-    // Upsert analytics
-    const engagementRate =
-      liPost.impressions > 0
-        ? Math.round(
-            ((liPost.likes + liPost.comments + liPost.reposts) /
-              liPost.impressions) *
-              1000
-          ) / 10
-        : 0
-
-    await supabase
-      .from('post_analytics')
-      .upsert(
-        {
-          post_id: postId,
-          impressions: liPost.impressions,
-          likes: liPost.likes,
-          comments: liPost.comments,
-          shares: liPost.reposts,
-          engagement_rate: engagementRate,
-          synced_at: new Date().toISOString(),
-        },
-        { onConflict: 'post_id' }
-      )
-
-    synced++
+  type ValidPost = {
+    liPost: typeof liPosts[number]
+    contentKey: string
+    existingId: string | null
   }
 
-  console.log(
-    `[syncAnalytics] synced ${synced} posts, created ${created} new entries`
-  )
+  const validPosts: ValidPost[] = []
+  for (const liPost of liPosts) {
+    if (!liPost.text || liPost.text.length < 20) continue
+    if (liPost.impressions === 0 && liPost.likes === 0 && liPost.comments === 0) continue
+    const contentKey = liPost.text.slice(0, 100).toLowerCase().trim()
+    const existingId = existingByLiId.get(liPost.id) ?? existingByContent.get(contentKey) ?? null
+    validPosts.push({ liPost, contentKey, existingId })
+  }
+
+  // ─── Bulk insert new posts ───
+  const toInsert = validPosts.filter((v) => !v.existingId).map((v) => {
+    let pubDate = new Date().toISOString()
+    try {
+      const d = new Date(v.liPost.date)
+      if (!isNaN(d.getTime())) pubDate = d.toISOString()
+    } catch { /* use current date */ }
+    return {
+      user_id: userId,
+      content: v.liPost.text,
+      linkedin_post_id: v.liPost.id,
+      status: 'published',
+      published_at: pubDate,
+    }
+  })
+
+  let created = 0
+  if (toInsert.length > 0) {
+    const { data: inserted } = await supabase
+      .from('posts')
+      .insert(toInsert)
+      .select('id, linkedin_post_id')
+    if (inserted) {
+      created = inserted.length
+      // Map back to validPosts so we have postIds for analytics
+      const insertedByLiId = new Map<string, string>()
+      for (const row of inserted) {
+        if (row.linkedin_post_id) insertedByLiId.set(row.linkedin_post_id, row.id)
+      }
+      for (const v of validPosts) {
+        if (!v.existingId) {
+          v.existingId = insertedByLiId.get(v.liPost.id) ?? null
+        }
+      }
+    }
+  }
+
+  // ─── Bulk upsert analytics ───
+  const analyticsRows = validPosts
+    .filter((v) => v.existingId)
+    .map((v) => ({
+      post_id: v.existingId!,
+      impressions: v.liPost.impressions,
+      likes: v.liPost.likes,
+      comments: v.liPost.comments,
+      shares: v.liPost.reposts,
+      engagement_rate: v.liPost.impressions > 0
+        ? Math.round(
+            ((v.liPost.likes + v.liPost.comments + v.liPost.reposts) / v.liPost.impressions) * 1000
+          ) / 10
+        : 0,
+      synced_at: new Date().toISOString(),
+    }))
+
+  let synced = 0
+  if (analyticsRows.length > 0) {
+    const { error } = await supabase
+      .from('post_analytics')
+      .upsert(analyticsRows, { onConflict: 'post_id' })
+    if (!error) synced = analyticsRows.length
+  }
+
+  console.log(`[syncAnalytics] synced ${synced} posts, created ${created} new entries`)
   return { synced, created }
 }
