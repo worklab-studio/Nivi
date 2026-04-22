@@ -129,6 +129,45 @@ export async function GET(req: Request) {
         )
         const messages = (await msgRes.json()).items ?? []
 
+        // Quick check: any unprocessed user messages? If not, skip plan check
+        // (plan check is cheap but pointless if there's nothing to process)
+        const hasNewUserMsg = messages.some(
+          (m: { is_sender?: boolean; id: string; text?: string; timestamp?: string }) => {
+            if (m.is_sender) return false
+            if (processedIds.has(m.id)) return false
+            const t = m.timestamp ? new Date(m.timestamp).getTime() : 0
+            if (t && t < Date.now() - 120000) return false
+            return true
+          }
+        )
+        if (!hasNewUserMsg) continue
+
+        // === PLAN GATE: trial expired or subscription lapsed ===
+        // sendUpgradePromptIfNeeded sends ONE upgrade message per 24h,
+        // returns allowed=false if user is on free post-trial. We mark all
+        // recent user messages as processed so we don't re-evaluate them.
+        const { sendUpgradePromptIfNeeded } = await import('@/lib/whatsapp/upgradePrompt')
+        const planGate = await sendUpgradePromptIfNeeded(
+          { id: user.id, name: user.name, whatsapp_number: user.whatsapp_number },
+          chat.id
+        )
+        if (!planGate.allowed) {
+          // Mark all recent user messages as processed so we don't loop on them
+          for (const m of messages) {
+            if (m.is_sender || processedIds.has(m.id)) continue
+            try {
+              await supabase.from('user_memory').insert({
+                user_id: user.id,
+                fact: `wa_msg_${m.id}`,
+                category: 'poll_dedup',
+                source: 'system',
+              })
+              processedIds.add(m.id)
+            } catch { /* dedup race ok */ }
+          }
+          continue
+        }
+
         // Collect all new unprocessed messages from this user into one batch
         const newTexts: string[] = []
         const newMsgIds: string[] = []

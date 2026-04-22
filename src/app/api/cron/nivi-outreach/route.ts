@@ -29,6 +29,12 @@ export async function GET(req: Request) {
     try {
       // === SPAM PREVENTION ===
 
+      // Plan gate: skip non-paying users (trial expired or subscription lapsed).
+      // They get the upgrade prompt on the reply path, not via proactive messages.
+      const { checkPlan } = await import('@/lib/utils/planGating')
+      const { allowed } = await checkPlan(user.id, 'complete')
+      if (!allowed) continue
+
       // 4-hour cooldown
       if (user.last_nivi_outreach_at) {
         const hoursSince = (now.getTime() - new Date(user.last_nivi_outreach_at).getTime()) / 3600000
