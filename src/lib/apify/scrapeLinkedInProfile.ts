@@ -59,7 +59,23 @@ export async function scrapeLinkedInProfile(
   const items = Array.isArray(data) ? data : []
   if (items.length === 0) throw new Error('Apify returned empty dataset')
 
-  return normalizeApifyProfile(items[0])
+  const profile = normalizeApifyProfile(items[0])
+
+  // Validate result is actually useful — Apify sometimes returns 1 item with
+  // all fields empty (e.g. for sparse/private LinkedIn profiles it can't see).
+  // Treat that as failure so the caller falls back to Unipile.
+  const hasUsefulData =
+    (profile.name && profile.name !== 'LinkedIn user') ||
+    profile.headline ||
+    profile.summary ||
+    profile.experience.length > 0 ||
+    profile.skills.length > 0 ||
+    profile.education.length > 0
+  if (!hasUsefulData) {
+    throw new Error('Apify returned profile with no usable data (empty fields)')
+  }
+
+  return profile
 }
 
 /**
