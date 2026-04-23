@@ -61,5 +61,7 @@ export async function GET(req: Request) {
     posts = shuffle([...posts]).slice(0, limit)
   }
 
-  return Response.json({ posts })
+  return Response.json({ posts }, {
+    headers: { 'Cache-Control': 'private, max-age=300, stale-while-revalidate=3600' },
+  })
 }

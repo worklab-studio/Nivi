@@ -14,7 +14,9 @@ export async function GET() {
     .or(`is_curated.eq.true,user_id.eq.${userId}`)
     .order('is_curated', { ascending: false })
 
-  return Response.json({ templates: data ?? [] })
+  return Response.json({ templates: data ?? [] }, {
+    headers: { 'Cache-Control': 'private, max-age=300, stale-while-revalidate=3600' },
+  })
 }
 
 /**

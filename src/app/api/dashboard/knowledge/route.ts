@@ -12,5 +12,7 @@ export async function GET() {
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
 
-  return Response.json({ chunks: data ?? [] })
+  return Response.json({ chunks: data ?? [] }, {
+    headers: { 'Cache-Control': 'private, max-age=300, stale-while-revalidate=3600' },
+  })
 }

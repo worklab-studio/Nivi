@@ -36,7 +36,9 @@ export async function GET() {
     ? { ...data, personal_info: [...stored, ...chatRows] }
     : { personal_info: chatRows }
 
-  return Response.json({ identity })
+  return Response.json({ identity }, {
+    headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=300' },
+  })
 }
 
 export async function PATCH(req: Request) {

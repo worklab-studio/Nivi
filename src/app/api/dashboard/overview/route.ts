@@ -1,6 +1,6 @@
 import { auth, currentUser } from '@clerk/nextjs/server'
 import { getSupabaseAdmin } from '@/lib/supabase/admin'
-import { getCachedLinkedInProfile } from '@/lib/unipile/profile'
+// Profile fields read from cached users.linkedin_* columns directly (no network call)
 import { ensureUser } from '@/lib/auth/ensureUser'
 import { setPersonProperties } from '@/lib/analytics/posthog'
 // getMyRecentPosts removed — post dates now come from local DB (synced by cron)
@@ -15,11 +15,19 @@ export async function GET() {
 
   const supabase = getSupabaseAdmin()
 
-  const [{ data: user }, { data: posts }, { data: engagement }, { data: identity }, linkedInProfile] = await Promise.all([
-    supabase.from('users').select('name, streak_count, unipile_account_id, whatsapp_number').eq('id', userId).single(),
+  // 4 parallel Supabase queries — no external network calls.
+  // LinkedIn profile is read from the cached columns on the users table itself
+  // (linkedin_display_name etc.) — no separate Unipile/Apify call.
+  const [{ data: user }, { data: posts }, { data: engagement }, { data: identity }] = await Promise.all([
+    supabase
+      .from('users')
+      .select('name, streak_count, unipile_account_id, whatsapp_number, linkedin_display_name, linkedin_headline, linkedin_avatar_url, linkedin_profile_cache')
+      .eq('id', userId)
+      .single(),
+    // Slim post select — only the columns the overview actually uses
     supabase
       .from('posts')
-      .select('*, post_analytics(*)')
+      .select('id, content, status, hook_type, content_pillar, scheduled_at, published_at, created_at, image_url, post_analytics(impressions, likes, comments, shares, engagement_rate)')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(100),
@@ -34,17 +42,24 @@ export async function GET() {
       .select('about_you, target_audience, content_pillars, personal_info')
       .eq('user_id', userId)
       .maybeSingle(),
-    getCachedLinkedInProfile(userId),
   ])
 
-  // Update PostHog person properties
+  // Build LinkedIn profile from cached columns (no network)
+  const linkedInProfile = {
+    name: user?.linkedin_display_name ?? user?.name ?? 'You',
+    headline: user?.linkedin_headline ?? '',
+    avatarUrl: user?.linkedin_avatar_url ?? '',
+  }
+
+  // Update PostHog person properties — fire-and-forget, don't block the response
   if (user) {
-    setPersonProperties(userId, {
-      name: user.name,
-      plan: 'free', // user.plan not selected — keep simple
-      linkedin_connected: !!user.unipile_account_id,
-      whatsapp_connected: !!user.whatsapp_number,
-    })
+    void Promise.resolve().then(() =>
+      setPersonProperties(userId, {
+        name: user.name,
+        linkedin_connected: !!user.unipile_account_id,
+        whatsapp_connected: !!user.whatsapp_number,
+      })
+    )
   }
 
   const allPosts = posts ?? []
@@ -115,15 +130,15 @@ export async function GET() {
   let followers = 0
   let connections = 0
   if (user?.unipile_account_id) {
-    // Get followers/connections from Apify cache (instant, no network call)
-    try {
-      const { getLinkedInProfileCached } = await import('@/lib/apify/scrapeLinkedInProfile')
-      const cached = await getLinkedInProfileCached(userId)
-      if (cached) {
-        followers = cached.followerCount ?? 0
-        connections = cached.connectionCount ?? 0
-      }
-    } catch { /* best effort */ }
+    // Read followers/connections from cached JSONB on the users row (already loaded above).
+    // Zero extra DB call.
+    const cached = user.linkedin_profile_cache as
+      | { followerCount?: number; connectionCount?: number }
+      | null
+    if (cached) {
+      followers = cached.followerCount ?? 0
+      connections = cached.connectionCount ?? 0
+    }
 
     // Get post dates from local DB (already synced)
     for (const p of published) {
@@ -298,7 +313,7 @@ export async function GET() {
   const draftsCount = allPosts.filter((p) => p.status === 'draft').length
   const scheduledCount = allPosts.filter((p) => p.status === 'scheduled').length
 
-  return Response.json({
+  const body = {
     userName: profile.name !== 'You' ? profile.name : (user?.name ?? 'there'),
     profile: {
       name: profile.name !== 'You' ? profile.name : (user?.name ?? 'there'),
@@ -356,5 +371,15 @@ export async function GET() {
       comment: e.drafted_comment?.slice(0, 80) ?? '',
       status: e.status,
     })),
+  }
+
+  // Browser-side cache: 30s fresh, 5min stale-while-revalidate.
+  // Combined with the client-side sessionStorage cache, this means:
+  // - Same tab revisit within 30s → served from sessionStorage, instant
+  // - Other tabs / fresh load → browser HTTP cache, no DB hit on Vercel
+  return Response.json(body, {
+    headers: {
+      'Cache-Control': 'private, max-age=30, stale-while-revalidate=300',
+    },
   })
 }

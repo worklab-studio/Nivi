@@ -34,5 +34,7 @@ export async function GET(req: NextRequest) {
     comments: p.post_analytics?.[0]?.comments ?? 0,
   }))
 
-  return Response.json({ posts })
+  return Response.json({ posts }, {
+    headers: { 'Cache-Control': 'private, max-age=30, stale-while-revalidate=300' },
+  })
 }
