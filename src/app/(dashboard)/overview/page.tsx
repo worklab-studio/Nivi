@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
+import { useCachedFetch } from '@/lib/client/dataCache'
+import { OverviewSkeleton } from '@/components/skeletons/OverviewSkeleton'
 import {
   Area,
   AreaChart,
@@ -147,27 +149,20 @@ function MetricCard({
 }
 
 export default function OverviewPage() {
-  const [data, setData] = useState<OverviewData | null>(null)
-  const [loading, setLoading] = useState(true)
+  const { data, loading } = useCachedFetch<OverviewData>('overview', '/api/dashboard/overview', { ttlMs: 30_000 })
   const [showConnectModal, setShowConnectModal] = useState(false)
   const [bannerDismissed, setBannerDismissed] = useState(false)
 
   useEffect(() => {
-    fetch('/api/dashboard/overview')
-      .then((r) => r.json())
-      .then((d) => {
-        setData(d)
-        setLoading(false)
-        // Auto-show modal if both disconnected and not dismissed recently
-        const dismissed = localStorage.getItem('connection-modal-dismissed')
-        const dismissedAt = dismissed ? parseInt(dismissed) : 0
-        const hoursSinceDismiss = (Date.now() - dismissedAt) / 3600000
-        if (!d.connectionStatus?.linkedin && !d.connectionStatus?.whatsapp && hoursSinceDismiss > 24) {
-          setShowConnectModal(true)
-        }
-      })
-      .catch(() => setLoading(false))
-  }, [])
+    if (!data) return
+    // Auto-show modal if both disconnected and not dismissed recently
+    const dismissed = localStorage.getItem('connection-modal-dismissed')
+    const dismissedAt = dismissed ? parseInt(dismissed) : 0
+    const hoursSinceDismiss = (Date.now() - dismissedAt) / 3600000
+    if (!data.connectionStatus?.linkedin && !data.connectionStatus?.whatsapp && hoursSinceDismiss > 24) {
+      setShowConnectModal(true)
+    }
+  }, [data])
 
   // Full current year: Jan 1 → Dec 31
   const yearStartDate = new Date(new Date().getFullYear(), 0, 1)
@@ -204,19 +199,7 @@ export default function OverviewPage() {
   const hasAnyData = (data?.metrics.totalPublished ?? 0) > 0
 
   if (loading) {
-    return (
-      <div className="px-6 py-6">
-        <div className="animate-pulse space-y-4">
-          <div className="h-32 bg-secondary rounded-xl" />
-          <div className="grid grid-cols-5 gap-3">
-            {[...Array(5)].map((_, i) => (
-              <div key={i} className="h-24 bg-secondary rounded-xl" />
-            ))}
-          </div>
-          <div className="h-64 bg-secondary rounded-xl" />
-        </div>
-      </div>
-    )
+    return <OverviewSkeleton />
   }
 
   return (

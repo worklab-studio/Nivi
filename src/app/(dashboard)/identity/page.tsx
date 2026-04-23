@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { getStale, setCached } from '@/lib/client/dataCache'
+import { IdentitySkeleton } from '@/components/skeletons/IdentitySkeleton'
 import {
   Plus,
   Briefcase,
@@ -57,6 +59,7 @@ interface Identity {
 
 export default function IdentityPage() {
   const [identity, setIdentity] = useState<Identity>({})
+  const [identityLoaded, setIdentityLoaded] = useState(false)
   const identityRef = useRef<Identity>({})
   useEffect(() => {
     identityRef.current = identity
@@ -69,13 +72,22 @@ export default function IdentityPage() {
   const [questionKey, setQuestionKey] = useState<QuestionSetKey | null>(null)
 
   async function refresh() {
+    // Show stale cache instantly if available
+    const cached = getStale<{ identity: Identity }>('identity')
+    if (cached?.identity && !identityLoaded) {
+      setIdentity(cached.identity)
+      setIdentityLoaded(true)
+    }
     const res = await fetch('/api/dashboard/identity')
     const data = await res.json()
     setIdentity(data.identity ?? {})
+    setCached('identity', data)
+    setIdentityLoaded(true)
   }
 
   useEffect(() => {
     refresh()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   async function patch(partial: Partial<Identity>) {
@@ -115,6 +127,10 @@ export default function IdentityPage() {
   // Persist-able personal_info (excludes chat-sourced virtual rows)
   function persistPersonalInfo(next: PersonalInfo[]) {
     patch({ personal_info: next.filter((p) => p.source !== 'chat') })
+  }
+
+  if (!identityLoaded) {
+    return <IdentitySkeleton />
   }
 
   return (

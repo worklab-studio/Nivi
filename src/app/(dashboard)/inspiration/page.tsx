@@ -11,6 +11,7 @@ import {
   type InspirationPost,
 } from '@/components/inspiration/InspirationCard'
 import { toast } from 'sonner'
+import { InspirationSkeleton } from '@/components/skeletons/InspirationSkeleton'
 
 type Tab = 'trending' | 'library'
 
@@ -101,6 +102,10 @@ export default function InspirationPage() {
     } finally {
       setRefreshing(false)
     }
+  }
+
+  if (!loaded) {
+    return <InspirationSkeleton />
   }
 
   return (

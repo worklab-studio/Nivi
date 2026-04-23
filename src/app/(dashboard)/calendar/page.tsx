@@ -15,6 +15,7 @@ import {
 } from 'date-fns'
 import { ChevronLeft, ChevronRight, PanelLeftOpen } from 'lucide-react'
 import { toast } from 'sonner'
+import { CalendarSkeleton } from '@/components/skeletons/CalendarSkeleton'
 import { CalendarWeekGrid } from '@/components/dashboard/CalendarWeekGrid'
 import { CalendarMonthGrid } from '@/components/dashboard/CalendarMonthGrid'
 import {
@@ -33,6 +34,7 @@ export default function CalendarPage() {
   const [drafts, setDrafts] = useState<DraftItem[]>([])
   const [showSidebar, setShowSidebar] = useState(true)
   const [selected, setSelected] = useState<CalendarPost | null>(null)
+  const [initialLoaded, setInitialLoaded] = useState(false)
 
   const weekStart = useMemo(
     () => startOfWeek(anchor, { weekStartsOn: 1 }),
@@ -58,6 +60,7 @@ export default function CalendarPage() {
     const res = await fetch(`/api/dashboard/calendar?start=${start}&end=${end}`)
     const data = await res.json()
     setPosts(data.posts ?? [])
+    setInitialLoaded(true)
   }, [range])
 
   const loadDrafts = useCallback(async () => {
@@ -203,6 +206,10 @@ export default function CalendarPage() {
     view === 'week'
       ? `${format(weekStart, 'MMM d')} – ${format(addDays(weekStart, 6), 'MMM d, yyyy')}`
       : format(anchor, 'MMMM yyyy')
+
+  if (!initialLoaded) {
+    return <CalendarSkeleton />
+  }
 
   return (
     <div className="h-[calc(100vh-56px)] flex flex-col bg-background text-foreground">

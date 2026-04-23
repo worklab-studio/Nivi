@@ -1,7 +1,9 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useCachedFetch } from '@/lib/client/dataCache'
+import { PostsSkeleton } from '@/components/skeletons/PostsSkeleton'
 import { List, Columns3, LayoutGrid, Search, Plus } from 'lucide-react'
 import Link from 'next/link'
 import { PageHeader } from '@/components/dashboard/PageHeader'
@@ -43,35 +45,25 @@ const VIEW_ICONS: { key: ViewMode; Icon: typeof List; label: string }[] = [
 
 export default function PostsPage() {
   const router = useRouter()
-  const [posts, setPosts] = useState<Post[]>([])
-  const [loaded, setLoaded] = useState(false)
+  const { data: postsData, loading: postsLoading, refresh: refreshPosts } = useCachedFetch<{ posts: Post[] }>(
+    'posts',
+    '/api/dashboard/posts',
+    { ttlMs: 30_000 }
+  )
+  const { data: meData } = useCachedFetch<{ profile?: { name: string; headline: string; avatarUrl: string } }>(
+    'me',
+    '/api/dashboard/me',
+    { ttlMs: 5 * 60_000 }
+  )
+  const posts = useMemo(() => postsData?.posts ?? [], [postsData])
+  const loaded = !postsLoading
   const [tab, setTab] = useState<StatusTab>('all')
   const [view, setView] = useState<ViewMode>('list')
   const [pillarFilter, setPillarFilter] = useState('all')
   const [sortBy, setSortBy] = useState<SortBy>('newest')
   const [search, setSearch] = useState('')
   const [previewPost, setPreviewPost] = useState<Post | null>(null)
-  const [authorProfile, setAuthorProfile] = useState<{
-    name: string
-    headline: string
-    avatarUrl: string
-  }>({ name: 'You', headline: '', avatarUrl: '' })
-
-  useEffect(() => {
-    fetch('/api/dashboard/posts')
-      .then((r) => r.json())
-      .then((d) => {
-        setPosts(d.posts ?? [])
-        setLoaded(true)
-      })
-      .catch(() => setLoaded(true))
-    fetch('/api/dashboard/me')
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.profile) setAuthorProfile(d.profile)
-      })
-      .catch(() => {})
-  }, [])
+  const authorProfile = meData?.profile ?? { name: 'You', headline: '', avatarUrl: '' }
 
   const counts = useMemo(
     () => ({
@@ -117,7 +109,6 @@ export default function PostsPage() {
   }, [posts, tab, pillarFilter, sortBy, search])
 
   async function handleDelete(id: string) {
-    setPosts((prev) => prev.filter((p) => p.id !== id))
     try {
       await fetch('/api/posts/delete', {
         method: 'DELETE',
@@ -125,6 +116,7 @@ export default function PostsPage() {
         body: JSON.stringify({ postId: id }),
       })
       toast.success('Post deleted')
+      void refreshPosts()
     } catch {
       toast.error('Delete failed')
     }
@@ -139,17 +131,8 @@ export default function PostsPage() {
       })
       const data = await res.json()
       if (data.ok && data.post) {
-        setPosts((prev) => [
-          {
-            ...data.post,
-            impressions: 0,
-            likes: 0,
-            comments: 0,
-            engagement_rate: 0,
-          },
-          ...prev,
-        ])
         toast.success('Duplicated as draft')
+        void refreshPosts()
       } else {
         toast.error(data.error ?? 'Could not duplicate')
       }
@@ -166,6 +149,10 @@ export default function PostsPage() {
       // Published/skipped — open preview modal with repurpose option
       setPreviewPost(post)
     }
+  }
+
+  if (postsLoading) {
+    return <PostsSkeleton />
   }
 
   return (

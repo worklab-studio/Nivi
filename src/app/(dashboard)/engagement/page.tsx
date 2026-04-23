@@ -21,6 +21,7 @@ import { AddOpportunityDialog } from '@/components/engagement/AddOpportunityDial
 import { PostStatusBadge } from '@/components/dashboard/PostStatusBadge'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
+import { EngagementSkeleton } from '@/components/skeletons/EngagementSkeleton'
 
 interface Stats {
   pending: number
@@ -208,6 +209,10 @@ export default function EngagementPage() {
       toast.error('Delete failed')
       fetchTargets()
     }
+  }
+
+  if (!loaded) {
+    return <EngagementSkeleton />
   }
 
   return (
