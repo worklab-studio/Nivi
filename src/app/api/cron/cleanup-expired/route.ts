@@ -11,13 +11,18 @@ const POST_EXPIRY_GRACE_DAYS = 1
 
 /**
  * Daily sweep: find users whose trial or paid subscription has ended and
- * still have a billable Unipile account or active WhatsApp link, then run
+ * still have a billable Unipile LinkedIn account, then run
  * cleanupExpiredAccess on each.
  *
+ * Note we ONLY target users with a Unipile LinkedIn account here. WhatsApp
+ * stays connected after expiry (so the user can receive the upgrade prompt
+ * and reply to resubscribe), so a present whatsapp_number alone is not a
+ * cleanup trigger.
+ *
  * The upgrade-prompt path (sendUpgradePromptIfNeeded) already disconnects
- * on the first post-expiry message. This cron catches users who never text
- * after expiring (so the prompt path never fires) and we'd otherwise pay
- * Unipile fees forever.
+ * LinkedIn on the first post-expiry message. This cron catches users who
+ * never text after expiring (so the prompt path never fires) and we'd
+ * otherwise pay Unipile fees forever.
  *
  * Cron schedule wired in vercel.json: daily at 03:30 UTC.
  */
@@ -43,21 +48,21 @@ export async function GET(req: Request) {
   //      ended without conversion.
   //   B. plan_expires_at older than (grace) days — paid plan was cancelled
   //      and the post-cancellation period has passed.
-  // Both cohorts must still have an active resource (unipile_account_id OR
-  // whatsapp_number) to be worth touching.
+  // Both cohorts must still have an attached LinkedIn (unipile_account_id)
+  // — that's the only billable resource we revoke. WhatsApp stays linked.
   const { data: expiredFree } = await supabase
     .from('users')
-    .select('id, email, plan, created_at, unipile_account_id, whatsapp_number')
+    .select('id, email, plan, created_at, unipile_account_id')
     .eq('plan', 'free')
     .lt('created_at', trialCutoff)
-    .or('unipile_account_id.not.is.null,whatsapp_number.not.is.null')
+    .not('unipile_account_id', 'is', null)
 
   const { data: expiredPaid } = await supabase
     .from('users')
-    .select('id, email, plan, plan_expires_at, unipile_account_id, whatsapp_number')
+    .select('id, email, plan, plan_expires_at, unipile_account_id')
     .not('plan_expires_at', 'is', null)
     .lt('plan_expires_at', paidGraceCutoff)
-    .or('unipile_account_id.not.is.null,whatsapp_number.not.is.null')
+    .not('unipile_account_id', 'is', null)
 
   const candidates = [...(expiredFree ?? []), ...(expiredPaid ?? [])]
   // Dedupe by id in case a user matches both queries.
@@ -76,7 +81,6 @@ export async function GET(req: Request) {
     userId: string
     email?: string
     unipileDeleted: boolean
-    whatsappCleared: boolean
   }> = []
 
   for (const u of unique) {
@@ -85,21 +89,16 @@ export async function GET(req: Request) {
       userId: r.userId,
       email: u.email ?? undefined,
       unipileDeleted: r.unipileDeleted,
-      whatsappCleared: r.whatsappCleared,
     })
   }
 
   const unipileFreed = results.filter((r) => r.unipileDeleted).length
-  const whatsappFreed = results.filter((r) => r.whatsappCleared).length
-  console.log(
-    `[cleanup-expired] done: unipile_freed=${unipileFreed} whatsapp_freed=${whatsappFreed}`
-  )
+  console.log(`[cleanup-expired] done: unipile_freed=${unipileFreed}`)
 
   return Response.json({
     ok: true,
     processed: unique.length,
     unipileFreed,
-    whatsappFreed,
     results,
   })
 }

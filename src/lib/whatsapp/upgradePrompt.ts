@@ -44,10 +44,12 @@ export async function sendUpgradePromptIfNeeded(
   }
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://hellonivi.com'
-  const message = `Hey ${user.name}! Your Nivi access has ended.\n\nTo keep chatting with me on WhatsApp, upgrade to the Complete plan ($35/mo).\n\nVisit: ${appUrl}/pricing`
+  // The prompt mentions reconnecting LinkedIn because we delete the user's
+  // Unipile LinkedIn account on cleanup — they need to relink it after they
+  // resubscribe. WhatsApp stays connected so this very message can be
+  // delivered and so they can reply to upgrade.
+  const message = `hey ${user.name}, your nivi trial has ended.\n\nresubscribe to keep chatting on whatsapp: ${appUrl}/pricing\n\nonce you're back, you'll need to reconnect your linkedin from the dashboard so i can keep posting + tracking analytics for you.`
 
-  // Send the prompt FIRST while we still know how to reach them (cleanup
-  // clears whatsapp_number, so reversing the order would break delivery).
   await sendWhatsApp(user.whatsapp_number, message, chatId)
 
   await supabase.from('user_memory').insert({
@@ -57,12 +59,13 @@ export async function sendUpgradePromptIfNeeded(
     source: 'system',
   })
 
-  // Now disconnect: delete Unipile account, null out whatsapp_number /
-  // pending_whatsapp / unipile_account_id. Best-effort; never throws.
+  // Disconnect LinkedIn (per-Unipile-account billable) but leave the user's
+  // WhatsApp number intact so future "resubscribed" / "i upgraded" messages
+  // still reach us. Best-effort; never throws.
   cleanupExpiredAccess(user.id).catch((err) =>
     console.error(`[upgradePrompt] cleanup failed for ${user.id}:`, err)
   )
 
-  console.log(`[upgradePrompt] sent + scheduled cleanup for ${user.name} (${user.id})`)
+  console.log(`[upgradePrompt] sent + scheduled LinkedIn cleanup for ${user.name} (${user.id})`)
   return { allowed: false, promptSent: true }
 }
