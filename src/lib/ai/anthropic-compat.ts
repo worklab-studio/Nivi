@@ -112,7 +112,15 @@ interface CreateResponse {
 let cachedAnthropic: Anthropic_SDK | null = null
 function getAnthropic(): Anthropic_SDK {
   if (!cachedAnthropic) {
-    cachedAnthropic = new Anthropic_SDK({ apiKey: getEnv('ANTHROPIC_API_KEY') })
+    cachedAnthropic = new Anthropic_SDK({
+      apiKey: getEnv('ANTHROPIC_API_KEY'),
+      // SDK default is 10 min — too long for our 300s Vercel functions, the
+      // call would drain the entire lambda before throwing. Cap at 60s.
+      timeout: 60_000,
+      // Default is 2 retries. Keep one retry for transient 5xx but don't
+      // burn the whole timeout budget on backoff.
+      maxRetries: 1,
+    })
   }
   return cachedAnthropic
 }

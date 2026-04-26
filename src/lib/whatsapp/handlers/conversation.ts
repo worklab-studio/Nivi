@@ -2105,18 +2105,32 @@ ${(userData as { pending_image_url?: string } | null)?.pending_image_url
   // user/assistant messages.
   if (!response) {
     log('calling sonnet model=' + pickModel('whatsapp-conversation') + ' tools=' + NIVI_TOOLS.length)
-    response = await new Anthropic().messages.create({
-      model: pickModel('whatsapp-conversation'),
-      max_tokens: 8192,
-      system: [
-        { type: 'text', text: staticSystem, cache_control: { type: 'ephemeral', ttl: '5m' } },
-        { type: 'text', text: dynamicSystem },
-      ],
-      messages,
-      tools: NIVI_TOOLS,
-      metadata: { userId, role: 'whatsapp-conversation' },
-    })
-    log('sonnet returned, stop_reason=' + response.stop_reason)
+    try {
+      response = await new Anthropic().messages.create({
+        model: pickModel('whatsapp-conversation'),
+        max_tokens: 8192,
+        system: [
+          { type: 'text', text: staticSystem, cache_control: { type: 'ephemeral', ttl: '5m' } },
+          { type: 'text', text: dynamicSystem },
+        ],
+        messages,
+        tools: NIVI_TOOLS,
+        metadata: { userId, role: 'whatsapp-conversation' },
+      })
+      log('sonnet returned, stop_reason=' + response.stop_reason)
+    } catch (err) {
+      const e = err as { status?: number; message?: string; name?: string }
+      log(`sonnet THREW name=${e.name} status=${e.status} msg=${(e.message ?? '').slice(0, 200)}`)
+      // Tell the user something went wrong rather than letting the lambda
+      // die silently. They get a real reply, we get a real log line.
+      const fallback = 'oof my brain just hung for a sec, can you resend that?'
+      try {
+        await sendWhatsApp(user.whatsapp_number, fallback, user.chatId)
+      } catch (sendErr) {
+        log('fallback send also failed: ' + (sendErr as Error).message)
+      }
+      return Response.json({ ok: false, error: 'sonnet_failed' })
+    }
   }
 
   // Handle tool use loop (Claude may call tools, then we feed results back)
@@ -2144,17 +2158,31 @@ ${(userData as { pending_image_url?: string } | null)?.pending_image_url
 
     // Post-tool follow-up. Same model, same cached static/dynamic split —
     // identical STATIC bytes mean the cache hit carries over.
-    response = await new Anthropic().messages.create({
-      model: pickModel('whatsapp-conversation'),
-      max_tokens: 8192,
-      system: [
-        { type: 'text', text: staticSystem, cache_control: { type: 'ephemeral', ttl: '5m' } },
-        { type: 'text', text: dynamicSystem },
-      ],
-      messages: toolMessages,
-      tools: NIVI_TOOLS,
-      metadata: { userId, role: 'whatsapp-conversation' },
-    })
+    log('post-tool sonnet call (toolMessages=' + toolMessages.length + ')')
+    try {
+      response = await new Anthropic().messages.create({
+        model: pickModel('whatsapp-conversation'),
+        max_tokens: 8192,
+        system: [
+          { type: 'text', text: staticSystem, cache_control: { type: 'ephemeral', ttl: '5m' } },
+          { type: 'text', text: dynamicSystem },
+        ],
+        messages: toolMessages,
+        tools: NIVI_TOOLS,
+        metadata: { userId, role: 'whatsapp-conversation' },
+      })
+      log('post-tool sonnet returned, stop_reason=' + response.stop_reason)
+    } catch (err) {
+      const e = err as { status?: number; message?: string; name?: string }
+      log(`post-tool sonnet THREW name=${e.name} status=${e.status} msg=${(e.message ?? '').slice(0, 200)}`)
+      const fallback = 'okay i hit a snag mid-task, can you give me one sec and try again?'
+      try {
+        await sendWhatsApp(user.whatsapp_number, fallback, user.chatId)
+      } catch (sendErr) {
+        log('fallback send also failed: ' + (sendErr as Error).message)
+      }
+      return Response.json({ ok: false, error: 'sonnet_post_tool_failed' })
+    }
   }
 
   // Extract final text response (unless the casual short-circuit already
