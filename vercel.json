@@ -24,6 +24,10 @@
     {
       "path": "/api/cron/nivi-outreach",
       "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/cron/cleanup-expired",
+      "schedule": "30 3 * * *"
     }
   ]
 }
