@@ -12,7 +12,10 @@ import { handleOptIn } from '@/lib/whatsapp/handlers/optIn'
 import { handleVoiceNote } from '@/lib/whatsapp/handlers/voiceNote'
 import { handleImage } from '@/lib/whatsapp/handlers/image'
 
-export const maxDuration = 60
+// Sonnet conversation calls + tool loop can run >60s in production. The
+// poll-whatsapp cron uses 300s for the same reason; keep them aligned so
+// the webhook isn't silently killed mid-reply.
+export const maxDuration = 300
 
 // In-memory dedupe cache for webhook message IDs
 const seenMessageIds = new Set<string>()
@@ -107,39 +110,95 @@ export async function POST(req: Request) {
     }
   }
 
-  // Look up user
+  // Look up user. Try exact whatsapp_number first, then suffix-match on the
+  // last 10 digits — some users connect a number formatted slightly
+  // differently than what WhatsApp's webhook reports (missing country code,
+  // extra leading zero, etc.) and we'd otherwise treat them as a new user
+  // forever.
   const supabase = getSupabaseAdmin()
-  const { data: user } = await supabase
+  const fromDigits = from.replace(/\D/g, '')
+  const fromSuffix = fromDigits.slice(-10)
+  let { data: user } = await supabase
     .from('users')
     .select('id, name, whatsapp_number, plan, timezone, niche, streak_count, onboarding_complete')
     .eq('whatsapp_number', from)
-    .single()
+    .maybeSingle()
 
-  if (!user) {
-    const upperText = text.trim().toUpperCase()
-    if (upperText.startsWith('START ')) {
-      handleOptIn(from, text.replace(/^START\s+/i, '').trim()).catch(() => {})
-    } else if (['YES', 'Y', 'OK', 'OKAY', 'YEP', 'SURE', 'HI', 'HELLO', 'HEY'].includes(upperText)) {
-      // Phone verification flow: user entered their number in Settings,
-      // Nivi sent them a message, they replied YES
-      const { data: pendingUser } = await supabase
-        .from('users')
-        .select('id, name')
-        .eq('pending_whatsapp', from)
-        .single()
-
-      if (pendingUser) {
-        await supabase
+  if (!user && fromSuffix.length === 10) {
+    const { data: suffixMatch } = await supabase
+      .from('users')
+      .select('id, name, whatsapp_number, plan, timezone, niche, streak_count, onboarding_complete')
+      .like('whatsapp_number', `%${fromSuffix}`)
+      .limit(1)
+      .maybeSingle()
+    if (suffixMatch) {
+      user = suffixMatch
+      // Normalize the stored number to what WhatsApp actually sends, so
+      // future lookups hit the exact-match fast path.
+      if (suffixMatch.whatsapp_number !== from) {
+        console.log('[WA lookup] normalizing stored whatsapp_number', suffixMatch.whatsapp_number, '→', from)
+        supabase
           .from('users')
-          .update({ whatsapp_number: from, pending_whatsapp: null })
-          .eq('id', pendingUser.id)
-
-        sendWhatsApp(
-          from,
-          `Connected! 🎉\n\nHey ${pendingUser.name}, your WhatsApp is linked. I'm Nivi — your AI brand strategist.\n\nI'll send you your morning brief, engagement opportunities, and help you write posts right here.\n\nJust text me anytime.`
-        ).catch(() => {})
+          .update({ whatsapp_number: from })
+          .eq('id', suffixMatch.id)
+          .then(() => {}, () => {})
       }
     }
+  }
+
+  if (!user) {
+    const trimmed = text.trim()
+    const upperText = trimmed.toUpperCase()
+
+    // Legacy path: explicit opt-in code ("START ABC123")
+    if (upperText.startsWith('START ')) {
+      handleOptIn(from, trimmed.replace(/^START\s+/i, '').trim()).catch(() => {})
+      return Response.json({ ok: true })
+    }
+
+    // Phone verification flow: user entered their number in onboarding or
+    // Settings, Nivi sent them a message. We set `pending_whatsapp` to the
+    // number they typed. Any reply from that number confirms the link —
+    // don't gate on specific keywords (users write "ok!", "yes please",
+    // "sure thing", "👍", Hindi greetings, etc.). Match strict-eq first,
+    // then suffix-match.
+    let pendingUser:
+      | { id: string; name: string | null; onboarding_complete: boolean | null }
+      | null = null
+    {
+      const { data } = await supabase
+        .from('users')
+        .select('id, name, onboarding_complete')
+        .eq('pending_whatsapp', from)
+        .maybeSingle()
+      pendingUser = data
+    }
+    if (!pendingUser && fromSuffix.length === 10) {
+      const { data } = await supabase
+        .from('users')
+        .select('id, name, onboarding_complete')
+        .like('pending_whatsapp', `%${fromSuffix}`)
+        .limit(1)
+        .maybeSingle()
+      pendingUser = data
+    }
+
+    if (pendingUser) {
+      await supabase
+        .from('users')
+        .update({ whatsapp_number: from, pending_whatsapp: null })
+        .eq('id', pendingUser.id)
+
+      const greeting = pendingUser.onboarding_complete
+        ? `welcome back ${pendingUser.name ?? ''}, whatsapp reconnected. your morning brief hits at your usual time.`
+        : `hey ${pendingUser.name ?? ''}! whatsapp is linked. head back to hellonivi.com to finish setting me up.`
+
+      sendWhatsApp(from, greeting.trim(), chatId).catch(() => {})
+      console.log('[WA opt-in] linked user', pendingUser.id, 'from', from)
+      return Response.json({ ok: true })
+    }
+
+    console.log('[WA unknown] no user or pending match for', from, 'msg:', text.slice(0, 80))
     return Response.json({ ok: true })
   }
 

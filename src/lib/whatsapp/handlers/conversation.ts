@@ -50,12 +50,15 @@ When you need a different choice (e.g. Save vs Publish), phrase it the same casu
 
 === HOW TO WRITE (WhatsApp, not email) ===
 
-- **Match user length.** 5 words in → 5-15 words out. Paragraph in → 2-3 short bubbles max.
+- **RESPOND TO THE LATEST MESSAGE.** Answer what they JUST said, not something from 3 turns ago. If they shifted topic, shift with them. Never drag back old threads unless they bring them up.
+- **SHORT. SHORT. SHORT.** Most replies are 5-20 words. One bubble. That's it. Long replies feel like AI. Humans on WhatsApp are lazy.
+- **Match user length.** 5 words in → 5-15 words out. Paragraph in → 2-3 short bubbles max. NEVER exceed the user's word count by more than 2x unless they explicitly asked for a post draft or a list.
 - **Multiple thoughts = blank line between them.** Each paragraph separated by a blank line becomes its own WhatsApp bubble. Keep each paragraph 1-3 lines, most messages 1-2 bubbles.
-- **Casual one-liners for simple reactions.** "lol makes sense", "ohhh nice 💪", "hmm yeah tbh". No splitting needed — just one short line.
+- **Casual one-liners for simple reactions.** "lol makes sense", "ohhh nice", "hmm yeah tbh". No splitting needed, just one short line.
 - **Lowercase, contractions, optional punctuation.** im, youre, dont, wasnt, lol, tbh, ngl, hmm, ahh, oof, ugh.
-- **No markdown, no bullets, no headers, no numbered lists** — WhatsApp doesnt render them.
-- **Emojis sparingly** — max 1 per bubble, often zero.
+- **No markdown, no bullets, no headers, no numbered lists.** WhatsApp doesnt render them.
+- **NEVER use em dashes (—) or en dashes (–).** They scream AI. Use a comma, a period, or split into two sentences. If you catch yourself about to type one, rewrite the sentence.
+- **Emojis sparingly.** Max 1 per bubble, often zero.
 - **Line breaks ONLY** for blank-line bubble splits, or for actual post drafts (between --- markers).
 
 Example casual: "oof leg day, respect 🔥"
@@ -1551,8 +1554,14 @@ function cleanForWhatsApp(text: string): string {
     // Remove code blocks
     .replace(/```[\s\S]*?```/g, '')
     .replace(/`(.+?)`/g, '$1')
+    // Em/en dashes → commas (humans don't type em dashes on WhatsApp; they
+    // give Nivi away as AI). Handle surrounding whitespace so we don't
+    // leave double spaces.
+    .replace(/\s*[\u2014\u2013]\s*/g, ', ')
     // Collapse multiple newlines into max 2
     .replace(/\n{3,}/g, '\n\n')
+    // Collapse any double spaces that em-dash replacement may have created.
+    .replace(/ {2,}/g, ' ')
     .trim()
 }
 
@@ -1621,7 +1630,11 @@ export async function handleConversation(
   user: { whatsapp_number: string; name?: string; chatId?: string },
   text: string
 ): Promise<Response> {
-  
+  const t0 = Date.now()
+  const log = (msg: string) =>
+    console.log(`[handleConversation ${userId.slice(-8)} +${Date.now() - t0}ms]`, msg)
+  log('ENTER text=' + text.slice(0, 60))
+
   const anthropic = new Anthropic()
   const supabase = getSupabaseAdmin()
 
@@ -1981,12 +1994,21 @@ The user has been silent for ${gapHuman}. This is them coming back after a break
 - A real human would treat this as "we last talked ${gapHuman} ago, hi again, what's up now" — not "let me continue from where we left off".`
     : ''
 
+  const userWordCount = text.trim().split(/\s+/).filter(Boolean).length
+  const targetWordCap = Math.max(15, Math.min(60, userWordCount * 3))
+
   const dynamicSystem = `=== LIVE STATE ===
 DAYS TOGETHER: ${daysTogether}
 RELATIONSHIP PHASE: ${getRelationshipPhase(daysTogether)}
 Total conversations: ${(historyRes.data?.length ?? 0) / 2}
 TIME: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}
 LAST MESSAGE FROM/TO USER: ${gapHuman ?? 'first ever message'} ago
+
+=== THIS TURN'S CONSTRAINTS ===
+- User just sent a ${userWordCount}-word message. Your reply target: under ${targetWordCap} words total across all bubbles.
+- RESPOND TO WHAT THEY JUST SAID. Do not answer an earlier question they already moved past.
+- NO em dashes. NO en dashes. Use commas or split sentences.
+- If this is small talk, one short bubble is correct. Do not pad.
 
 MEMORIES (${memories.length} facts — reference these naturally):
 ${memoryBlock}
@@ -2024,8 +2046,11 @@ ${(userData as { pending_image_url?: string } | null)?.pending_image_url
     | 'casual-fell-through'
     | 'sonnet-with-tools' = 'sonnet-with-tools'
 
+  log('after data load, casual=' + isCasualMessage(text) + ' staticLen=' + staticSystem.length + ' dynLen=' + dynamicSystem.length + ' msgs=' + messages.length)
+
   if (isCasualMessage(text)) {
     try {
+      log('calling casual model=' + pickModel('tool-router'))
       const casualRes = await new Anthropic().messages.create({
         model: pickModel('tool-router'),
         max_tokens: 1024,
@@ -2037,6 +2062,7 @@ ${(userData as { pending_image_url?: string } | null)?.pending_image_url
         // No tools — this branch is for "hey" / "ok" / "thanks" / etc.
         metadata: { userId, role: 'tool-router' },
       })
+      log('casual returned, content blocks=' + casualRes.content.length)
 
       const casualText = casualRes.content
         .filter((b) => b.type === 'text')
@@ -2078,6 +2104,7 @@ ${(userData as { pending_image_url?: string } | null)?.pending_image_url
   // so subsequent turns pay only for the dynamic block and the new
   // user/assistant messages.
   if (!response) {
+    log('calling sonnet model=' + pickModel('whatsapp-conversation') + ' tools=' + NIVI_TOOLS.length)
     response = await new Anthropic().messages.create({
       model: pickModel('whatsapp-conversation'),
       max_tokens: 8192,
@@ -2089,6 +2116,7 @@ ${(userData as { pending_image_url?: string } | null)?.pending_image_url
       tools: NIVI_TOOLS,
       metadata: { userId, role: 'whatsapp-conversation' },
     })
+    log('sonnet returned, stop_reason=' + response.stop_reason)
   }
 
   // Handle tool use loop (Claude may call tools, then we feed results back)
@@ -2141,6 +2169,7 @@ ${(userData as { pending_image_url?: string } | null)?.pending_image_url
 
   finalText = cleanForWhatsApp(finalText)
   if (!finalText) finalText = "done"
+  log('final text len=' + finalText.length + ' preview=' + finalText.slice(0, 60))
 
   // Save full reply to conversations as one row (so history retrieval
   // sees one coherent assistant turn, not N fragments).
@@ -2161,11 +2190,13 @@ ${(userData as { pending_image_url?: string } | null)?.pending_image_url
     (finalText.length > 600 && !finalText.includes('\n\n'))
 
   if (looksLikePostDraft) {
+    log('sending post-draft single bubble')
     await sendWhatsApp(user.whatsapp_number, finalText, user.chatId)
   } else {
     const MAX_BUBBLES = 3
     const TYPING_DELAY_MS = 700
     const bubbles = splitIntoBubbles(finalText, MAX_BUBBLES)
+    log('sending ' + bubbles.length + ' bubble(s) to ' + user.whatsapp_number)
     for (let i = 0; i < bubbles.length; i++) {
       await sendWhatsApp(user.whatsapp_number, bubbles[i], user.chatId)
       if (i < bubbles.length - 1) {
@@ -2173,6 +2204,7 @@ ${(userData as { pending_image_url?: string } | null)?.pending_image_url
       }
     }
   }
+  log('DONE')
   return Response.json({ ok: true })
 }
 
