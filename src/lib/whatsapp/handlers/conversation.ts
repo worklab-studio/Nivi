@@ -2029,7 +2029,12 @@ Rules for the block above:
 === PENDING IMAGE STATUS ===
 ${(userData as { pending_image_url?: string } | null)?.pending_image_url
   ? `An image is uploaded and ready. It will AUTOMATICALLY attach to the next post you publish to LinkedIn. No tool call needed. When you publish, just confirm "with the image you sent" or similar — dont say "i cant attach images" because you can.`
-  : 'No image pending. If user asks to add an image to a post, tell them to send it on WhatsApp first.'}`
+  : 'No image pending. If user asks to add an image to a post, tell them to send it on WhatsApp first.'}
+
+=== LINKEDIN CONNECTION STATUS ===
+${(userData as { unipile_account_id?: string | null } | null)?.unipile_account_id
+  ? 'LinkedIn is connected. Posting, commenting, profile lookups, analytics, all green.'
+  : `LinkedIn is NOT connected. This usually means the user just resubscribed after a trial gap and we deleted their LinkedIn link to stop billing. CRITICAL: do NOT call any LinkedIn tool (publish_linkedin_post, comment_on_linkedin_post, find_relevant_linkedin_posts, get_my_recent_posts, profile lookups, etc.). They will all fail with no account. Instead: tell the user warmly that they need to reconnect LinkedIn from the dashboard at hellonivi.com/settings (one click, opens a popup). Once they do, everything resumes. Until then keep chatting normally about content, ideas, drafts.`}`
 
   // ─── Two-tier routing: cheap model for casual chat ────────────
   // For short, clearly-casual messages we try a Haiku call with no tools
