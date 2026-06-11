@@ -1,33 +1,5 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "crons": [
-    {
-      "path": "/api/cron/tick",
-      "schedule": "0 3 * * *"
-    },
-    {
-      "path": "/api/cron/morning-brief",
-      "schedule": "0 4 * * *"
-    },
-    {
-      "path": "/api/cron/engagement-brief",
-      "schedule": "0 5 * * *"
-    },
-    {
-      "path": "/api/cron/reminders",
-      "schedule": "0 8 * * *"
-    },
-    {
-      "path": "/api/cron/poll-whatsapp",
-      "schedule": "*/2 * * * *"
-    },
-    {
-      "path": "/api/cron/nivi-outreach",
-      "schedule": "*/10 * * * *"
-    },
-    {
-      "path": "/api/cron/cleanup-expired",
-      "schedule": "30 3 * * *"
-    }
-  ]
+  "_note": "All scheduled jobs are paused — Nivi is fully stopped. Unipile (LinkedIn + WhatsApp) is disconnected. To revive, restore the entries in the `crons` array below from git history and redeploy after reconnecting Unipile.",
+  "crons": []
 }
